@@ -4,13 +4,13 @@ A command-line Zettelkasten and PIM.
 
 ## Introduction
 
-> [!IMPORTANT] The author started this project as an exercise to learn the Ruby
+> [!NOTE] The author started this project as an exercise to learn the Ruby
 > programming language, and the core of the project was developed in a
 > _traditional_ manner, the need and urgency to have a working tool, combined
 > with curiosity and professional interest quickly morphed this project into
 > being **heavily** co-developed with the aid of A.I. code-assistants. 
 
-ZettelHub started it's like as a collection of `bash` scripts to manage a 
+ZettelHub started it's life as a collection of `bash` scripts to manage a 
 personal notes collection. The author wanted something that was aligned to the
 [Zettelkasten](https://zettelkasten.de/) principles, but was a bit more
 automated. It turns out that `bash` is not really the _language_ to use for
@@ -284,8 +284,14 @@ syncing with remote repositories.
 
 Enable automatic commits after `add`, `tag`, and `import` operations:
 
-```yaml git: auto_commit: true auto_push: false  # Enable to also push after
-each auto-commit remote: origin branch: main ```
+```yaml 
+---
+git: 
+  auto_commit: true 
+  auto_push: false  # Enable to also push after each auto-commit 
+  remote: origin 
+  branch: main 
+```
 
 **Example workflow:**
 

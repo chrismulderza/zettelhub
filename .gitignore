@@ -1,0 +1,29 @@
+# IDE / editor
+.cursor/
+.vscode/
+.ruby-lsp/
+
+# Bundler
+.bundle/
+vendor/bundle/
+
+# Ruby
+*.gem
+*.rbc
+.config
+coverage/
+pkg/
+rdoc/
+tmp/
+temp/
+*.log
+.yardoc/
+doc/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local / test artifacts (optional: uncomment if you don't want to track)
+test_manual/
+*.db

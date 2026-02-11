@@ -4,7 +4,8 @@ A command-line Zettelkasten and PIM.
 
 ## Introduction
 
-> [!NOTE] The author started this project as an exercise to learn the Ruby
+> [!NOTE] 
+> The author started this project as an exercise to learn the Ruby
 > programming language, and the core of the project was developed in a
 > _traditional_ manner, the need and urgency to have a working tool, combined
 > with curiosity and professional interest quickly morphed this project into

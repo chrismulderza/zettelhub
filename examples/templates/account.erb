@@ -1,0 +1,43 @@
+---
+id: "<%= id %>"
+type: account
+date: "<%= date %>"
+title: "<%= title %>"
+aliases: "<%= aliases %>"
+tags: <%= tags %>
+description: "<%= description %>"
+crm:
+    id:
+    owner:
+    segment:
+    subsegment:
+    territory:
+config:
+    path: "accounts/<%= id %>-<%= slugify(title) %>.md"
+    default_alias: "{type}> {title}"
+    default_tags: [account, ssa]
+---
+
+# <%= title %>
+
+## Overview
+
+## Notes
+<%= content %>
+
+## Subsidiaries
+
+## Meetings
+
+## Account Plans
+
+## Activities
+
+## Opportunities
+
+## People
+
+## Partners
+
+## Support
+

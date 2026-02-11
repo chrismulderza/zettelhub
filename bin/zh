@@ -1,0 +1,350 @@
+#!/bin/bash
+
+# ZettelHub CLI tool
+
+DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+# Show help information
+show_help() {
+  cat << 'EOF'
+ZettelHub - Zettelkasten note management tool
+
+USAGE:
+    zh [--help] [--debug] <command> [arguments]
+
+COMMANDS:
+    add [TYPE]          Create a new note from a template
+                        TYPE defaults to 'note' if not specified
+                        Available types depend on configured templates
+                        Options: --title, --tags, --description (see below)
+                        If neither --title nor --tags provided, prompts interactively
+
+    init                Initialize a new notebook directory
+                        Creates .zh directory and default config.yaml
+
+    reindex             Re-index all markdown files in the notebook
+                        Scans notebook directory recursively and updates SQLite index
+
+    tag [list|add|remove|rename]  Tag management: list tags with counts; add/remove tag on a note; rename tag
+    tags                List all tags with counts (same as zh tag list)
+
+    search [OPTIONS]    Search notes using full-text search
+                        Interactive by default; use --list, --table, or --json to print to stdout
+
+    find [query]        Interactive find in note content (ripgrep + fzf)
+                        Always interactive.
+
+    import [OPTIONS] PATH [PATH ...]  Bulk import markdown notes; assigns new IDs, resolves links
+                        Use --into DIR, --recursive, --dry-run to preview
+
+    links NOTE_ID       List outgoing links (wikilinks and markdown) from a note
+    backlinks NOTE_ID   List notes that link to this note (incoming links)
+    graph NOTE_ID       Show link graph (DOT or ASCII) for a note and its neighbourhood
+
+    today               Open or create today's journal entry, then open in editor
+    yesterday           Open or create yesterday's journal entry, then open in editor
+    tomorrow            Open or create tomorrow's journal entry, then open in editor
+    journal [DATE]      Open or create journal for DATE (e.g. 2025-02-05), then open in editor
+
+    bookmark            Interactive bookmark browser (no args); add/export/refresh with subcommands
+    bookmark add [URL]  Create a bookmark; optional --title, --tags, --description
+    bookmark export     Export bookmarks to Netscape bookmarks.html
+    bookmark refresh    Validate URIs, mark unreachable as stale, fill empty descriptions
+
+    git init            Initialize git repository in notebook (creates .gitignore)
+    git status          Show modified/added/deleted notes with titles
+    git commit          Commit changes; auto-generates message if not provided
+    git sync            Pull then push with remote repository
+
+    history NOTE_ID     View git history for a note (interactive with fzf)
+    diff NOTE_ID        Show uncommitted changes to a note
+    restore NOTE_ID COMMIT  Restore a note to a previous version
+
+    completion          Generate bash completion script
+    _completion         Alias for 'completion' command
+
+OPTIONS:
+    --help, -h          Show this help message
+    --debug, -d         Enable debug output (shows template resolution details)
+
+ADD COMMAND OPTIONS:
+    --title, -t TITLE   Set the note title (can contain spaces)
+    --tags TAGS         Set tags as comma-separated list (e.g., "tag1, tag2, tag3")
+    --description, -d  Set a short description/overview of the note (optional)
+                        If neither --title nor --tags provided, prompts interactively (including description)
+
+EXAMPLES:
+    zh add             Create a note using default 'note' template (prompts for title/tags)
+    zh add journal     Create a note using 'journal' template (prompts for title/tags)
+    zh add --title "My Note" journal
+                        Create a journal note with title "My Note" (prompts for tags)
+    zh add --title "My Note" --tags "work, project"
+                        Create a note with title and tags (no prompts)
+    zh add --title "My Note" --description "Short overview"
+                        Create a note with title and description
+    zh --debug add     Create a note with debug output
+    zh init            Initialize notebook in current directory
+    zh reindex         Re-index all notes in the notebook
+    zh tags            List all tags with counts
+    zh tag add work abc12345   Add tag "work" to note abc12345
+    zh search "meeting notes"
+                        Interactive search (fzf) for "meeting notes"
+    zh search --list "meeting"
+                        Print matching notes as list to stdout
+    zh search --type journal --tag work "reflection"
+                        Search journal notes with work tag
+    zh find            Interactive find in note content (ripgrep + fzf)
+    zh find "meeting"  Find with initial query "meeting"
+    zh import /path/to/notes/*.md
+    zh import --recursive /path/to/notes
+    zh import --dry-run --into imported /path/to/notes
+    zh links abc12345  List links from note abc12345
+    zh backlinks abc12345   List notes linking to abc12345
+    zh graph abc12345 --format ascii
+    zh today           Open or create today's journal
+    zh yesterday       Open or create yesterday's journal
+    zh tomorrow        Open or create tomorrow's journal
+    zh journal 2025-02-05   Open or create journal for a specific date
+    zh bookmark             Browse bookmarks (select to open in browser)
+    zh bookmark add https://example.com
+    zh bookmark export --output bookmarks.html
+    zh bookmark refresh     Validate URIs and update stale/descriptions
+    zh git init             Initialize git in notebook
+    zh git init --remote git@github.com:user/notes.git
+    zh git status           Show notebook status
+    zh git commit -m "Add notes"
+    zh git sync             Push and pull with remote
+    zh history abc12345     View git history for a note
+    zh diff abc12345        Show uncommitted changes
+    zh restore abc12345 a1b2c3d  Restore note to previous version
+    zh completion      Generate and source completion script
+
+SHELL COMPLETION:
+    To enable bash completion:
+        source <(zh completion)
+
+    Or add to ~/.bashrc or ~/.zshrc:
+        source <(zh completion)
+
+    To complete only for zh: source <(zh completion)
+EOF
+}
+
+# Check for debug flag
+DEBUG_MODE=0
+if [ "$1" = "--debug" ] || [ "$1" = "-d" ]; then
+  DEBUG_MODE=1
+  shift
+fi
+
+COMMAND=$1
+
+shift
+
+# Handle --help before command processing
+if [ -z "$COMMAND" ] || [ "$COMMAND" = "--help" ] || [ "$COMMAND" = "-h" ]; then
+  show_help
+  exit 0
+fi
+
+case $COMMAND in
+  _completion|completion)
+    # Generate bash completion script
+    CMD_DIR="$DIR/../lib/cmd"
+    HELPER_SCRIPT="$DIR/../lib/cmd/_completion_helper.rb"
+    echo "# ZettelHub bash completion"
+    echo "_zh() {"
+    echo "  local cur prev words cword"
+    echo "  COMPREPLY=()"
+    echo "  cur=\"\${COMP_WORDS[COMP_CWORD]}\""
+    echo "  prev=\"\${COMP_WORDS[COMP_CWORD-1]}\""
+    echo ""
+    echo "  # If completing the first word (command name), list all commands"
+    echo "  if [ \$COMP_CWORD -eq 1 ]; then"
+    echo "    # Dynamically discover commands from lib/cmd/ directory"
+    echo "    local commands"
+    echo "    commands=\$(find \"$CMD_DIR\" -name '*.rb' -type f ! -name '_completion_helper.rb' -exec basename {} .rb \\;)"
+    echo "    COMPREPLY=(\$(compgen -W \"\$commands\" -- \"\$cur\"))"
+    echo "    return 0"
+    echo "  fi"
+    echo ""
+    echo "  # Command-specific argument completions (dynamically from commands)"
+    echo "  local cmd=\"\${COMP_WORDS[1]}\""
+    echo "  if [ -n \"\$cmd\" ] && [ \$COMP_CWORD -gt 1 ]; then"
+    echo "    # Check if completing an option (starts with --)"
+    echo "    if [[ \"\$cur\" == --* ]]; then"
+    echo "      # Get command-specific options if available"
+    echo "      local cmd_opts=\"\""
+    echo "      # Try to get options from command itself"
+    echo "      cmd_opts=\$(ruby \"$CMD_DIR/\${cmd}.rb\" --completion --options 2>/dev/null || echo '')"
+    echo "      # Common options available for all commands"
+    echo "      local common_opts"
+    echo "      common_opts=\$(ruby \"$HELPER_SCRIPT\" common_options 2>/dev/null || echo '--help --version')"
+    echo "      # Combine command-specific and common options"
+    echo "      local all_opts=\"\$cmd_opts \$common_opts\""
+    echo "      COMPREPLY=(\$(compgen -W \"\$all_opts\" -- \"\$cur\"))"
+    echo "      return 0"
+    echo "    fi"
+    echo ""
+    echo "    # Check if previous word is an option that takes a value"
+    echo "    local prev=\"\${COMP_WORDS[COMP_CWORD-1]}\""
+    echo "    if [[ \"\$prev\" == --* ]]; then"
+    echo "      # Previous word is an option, get its value completions"
+    echo "      local completions"
+    echo "      completions=\$(ruby \"$CMD_DIR/\${cmd}.rb\" --completion \"\$prev\" 2>/dev/null)"
+    echo "      if [ -n \"\$completions\" ]; then"
+    echo "        COMPREPLY=(\$(compgen -W \"\$completions\" -- \"\$cur\"))"
+    echo "        return 0"
+    echo "      fi"
+    echo "    else"
+    echo "      # Try positional completion first (e.g. zh tag add -> tags)"
+    echo "      local completions"
+    echo "      completions=\$(ruby \"$CMD_DIR/\${cmd}.rb\" --completion \"\$prev\" 2>/dev/null)"
+    echo "      if [ -n \"\$completions\" ]; then"
+    echo "        COMPREPLY=(\$(compgen -W \"\$completions\" -- \"\$cur\"))"
+    echo "        return 0"
+    echo "      fi"
+    echo "      # Fallback: show available options for this command"
+    echo "      local cmd_opts=\"\""
+    echo "      cmd_opts=\$(ruby \"$CMD_DIR/\${cmd}.rb\" --completion --options 2>/dev/null || echo '')"
+    echo "      local common_opts"
+    echo "      common_opts=\$(ruby \"$HELPER_SCRIPT\" common_options 2>/dev/null || echo '--help --version')"
+    echo "      local all_opts=\"\$cmd_opts \$common_opts\""
+    echo "      if [ -n \"\$all_opts\" ]; then"
+    echo "        COMPREPLY=(\$(compgen -W \"\$all_opts\" -- \"\$cur\"))"
+    echo "        return 0"
+    echo "      fi"
+    echo "    fi"
+    echo "  fi"
+    echo "}"
+    if [ $# -eq 0 ]; then
+      echo "complete -F _zh zh"
+    else
+      for name in "$@"; do [ -n "$name" ] && echo "complete -F _zh $name"; done
+    fi
+    ;;
+  add)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+      echo "running ruby $DIR/../lib/cmd/add.rb $@"
+    fi
+    ruby "$DIR/../lib/cmd/add.rb" "$@"
+    ;;
+  init)
+    ruby "$DIR/../lib/cmd/init.rb" "$@"
+    ;;
+  reindex)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/reindex.rb" "$@"
+    ;;
+  tag)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/tag.rb" "$@"
+    ;;
+  tags)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/tag.rb" list "$@"
+    ;;
+  search)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/search.rb" "$@"
+    ;;
+  find)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/find.rb" "$@"
+    ;;
+  import)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/import.rb" "$@"
+    ;;
+  today)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/journal.rb" today
+    ;;
+  yesterday)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/journal.rb" yesterday
+    ;;
+  tomorrow)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/journal.rb" tomorrow
+    ;;
+  links)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/links.rb" "$@"
+    ;;
+  backlinks)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/backlinks.rb" "$@"
+    ;;
+  graph)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/graph.rb" "$@"
+    ;;
+  journal)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/journal.rb" "$@"
+    ;;
+  bookmark)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/bookmark.rb" "$@"
+    ;;
+  git)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/git.rb" "$@"
+    ;;
+  history)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/history.rb" "$@"
+    ;;
+  diff)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/diff.rb" "$@"
+    ;;
+  restore)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/restore.rb" "$@"
+    ;;
+  *)
+    echo "Usage: zh <command> [options]"
+    echo "Commands: add, init, reindex, tag, tags, search, find, import, links, backlinks, graph, bookmark, git, history, diff, restore, today, yesterday, tomorrow, journal, completion"
+    echo "Run 'zh --help' for more information."
+    exit 1
+    ;;
+esac

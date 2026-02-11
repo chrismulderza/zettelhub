@@ -1,0 +1,123 @@
+# Sample configuration file for ZettelHub
+# Place this file at ~/.config/zh/config.yaml
+# config_version tracks project VERSION; installer uses major version for breaking detection.
+
+config_version: "0.1.0"
+
+# Path to your Zettelkasten notebook directory
+notebook_path: ~/Documents/notes
+
+# ZettelHub engine defaults
+engine:
+  date_format: '%Y-%m-%d'
+  slugify_replacement: '-'
+  default_alias: '{type}> {date}: {title}' 
+  db_result_delimiter: '|' # Delimiter used in database results.
+
+# External tools: command = executable only (validated for availability).
+# Per-module (find, search, add): args = placeholder string; opts = static CLI options.
+# Placeholders: find uses {1}=path, {2}=line; search uses {-1}=path; add uses {path}, {line}.
+tools:
+  editor:
+    command: 'vim'
+    find:
+      args: '{1} +{2}'
+      opts: []
+    search:
+      args: '{-1}'
+      opts: []
+    add:
+      args: '{path} +{line}'
+      opts: []
+    journal:
+      args: '{path}'
+      opts: []
+  preview:
+    command: 'bat'
+    find:
+      args: '{1} --highlight-line {2}'
+      opts:
+        - '--color=always'
+    search:
+      args: '{-1}'
+      opts:
+        - '--color=always'
+  open:
+    command: 'open'
+    find:
+      args: '{1}'
+      opts: []
+    search:
+      args: '{-1}'
+      opts: []
+  reader:
+    command: 'glow'
+    find:
+      args: '{1}'
+      opts:
+        - '--pager'
+    search:
+      args: '{-1}'
+      opts:
+        - '--pager'
+  filter:
+    command: 'fzf'
+    keybindings:
+      - 'enter:execute({editor_command})'
+      - 'ctrl-r:execute({reader_command})'
+      - 'ctrl-o:execute({open_command})'
+    search:
+      display_format: "{1}>{3}>{4},{5} (id:{2}) [tags:{6}]"
+      select_expression: '-1'
+      preview_window: 'up:60%'
+      header: 'Search: Enter=edit | Ctrl-r=read | Ctrl-o=open'
+    find:
+      opts:
+        - '--ansi'
+        - '--disabled'
+      preview_window: 'up:60%'
+      header: 'Find: Enter=edit | Ctrl-r=read | Ctrl-o=open'
+  matcher:
+    command: 'rg'
+    find:
+      opts:
+        - '--line-number'
+        - '--no-heading'
+        - '--color=always'
+        - '--smart-case'
+
+# Journal: path for daily journal entries (open/create via zh today, zh journal DATE)
+journal:
+  path_pattern: "journal/{date}.md"
+  default_title: "Journal for {day_name}, {day} {month_name} {year}"
+
+# Import: default target directory for zh import (relative to notebook_path) when --into/--target-dir not given
+import:
+  default_target_dir: imported
+
+# Git version control settings
+git:
+  auto_commit: false            # Automatically commit after add/tag/import operations
+  auto_push: false              # Automatically push after auto-commit (requires auto_commit: true)
+  remote: origin                # Default remote name for push/pull
+  branch: main                  # Default branch name for push/pull
+  commit_message_template: "Update notes: {changed_count} file(s)"  # Template for auto-commit messages
+  history_limit: 20             # Default number of commits shown in zh history
+
+# Search/find behavior
+search:
+  limit: 100
+
+find:
+  glob: 
+    - '*.md'
+    - '*.txt'
+    - '*.markdown'
+  ignore_glob: 
+    - '!.zh'
+    - '!.git'
+    - '!.DS_Store'
+  reload_delay: 0.1
+
+# Templates are discovered from .zh/templates (notebook) and ~/.config/zh/templates (global).
+# Type and output path come from each template's front matter (type, config.path).

@@ -1,0 +1,17 @@
+---
+id: "<%= id %>"
+type: note
+date: "<%= date %>"
+title: "<%= title %>"
+aliases: "<%= aliases %>"
+tags: <%= tags %>
+description: "<%= description %>"
+config:
+    path: "<%= id %>-<%= slugify(title) %>.md"
+    default_alias: "{type}> {date}: {title}"
+    default_tags: []
+---
+
+# <%= title %>
+
+<%= content %>

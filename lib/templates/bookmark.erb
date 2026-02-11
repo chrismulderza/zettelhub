@@ -1,0 +1,19 @@
+---
+id: "<%= id %>"
+type: bookmark
+uri: "<%= uri %>"
+title: "<%= title %>"
+aliases: "<%= aliases %>"
+tags: <%= tags %>
+description: "<%= description %>"
+config:
+  path: "resources/bookmarks/<%= slugify(title) %>-<%= id %>.md"
+  default_alias: "{type}> {title}"
+  default_tags: [resource, bookmark]
+---
+
+# <%= title %>
+
+Link: [<%= uri %>](<%= uri %>)
+
+<%= description %>

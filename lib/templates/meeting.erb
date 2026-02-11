@@ -1,0 +1,26 @@
+---
+id: "<%= id %>"
+type: meeting
+date: "<%= date %>"
+title: "<%= title %>"
+aliases: "<%= aliases %>"
+tags: <%= tags %>
+description: "<%= description %>"
+config:
+    path: "meetings/<%= year %>/<%= month %>/<%= id %>-<%= slugify(title) %>.md"
+    default_alias: "{type}> {date}: {title}"
+    default_tags:
+        - meeting
+---
+
+# Meeting: <%= title %>
+
+[<%= date %>](../journal/<%= date %>.md)
+
+## Agenda
+
+## Attendees
+
+## Meeting Notes
+
+## Next Steps

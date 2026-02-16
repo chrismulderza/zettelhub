@@ -362,11 +362,13 @@ class Indexer
   end
 
   # Updates the ## Backlinks section in the note file for the given note id. Reads file, removes existing section, appends new one from links table.
-  # Backlinks are rendered as markdown links [title](notebook_relative_path). Content before the section is preserved byte-for-byte (no re-parse).
+  # Backlinks are rendered as markdown links [title](file_relative_path). Content before the section is preserved byte-for-byte (no re-parse).
+  # Paths are computed relative to the note's directory so they work with standard markdown link resolution.
   def update_backlinks_section(note_id, db)
     row = db.execute('SELECT path FROM notes WHERE id = ?', [note_id]).first
     return unless row
-    note_path = File.join(@notebook_path, row[0])
+    note_rel_path = row[0]
+    note_path = File.join(@notebook_path, note_rel_path)
     return unless File.exist?(note_path)
 
     content = File.read(note_path)
@@ -394,16 +396,25 @@ class Indexer
       placeholders = (['?'] * source_ids.size).join(', ')
       rows = db.execute("SELECT id, path, title FROM notes WHERE id IN (#{placeholders})", source_ids)
       id_to_path_title = rows.to_h { |id, path, title| [id, { path: path.to_s.gsub(File::SEPARATOR, '/'), title: title.to_s.strip }] }
+
+      # Compute file-relative paths from the note's directory
+      note_dir = Pathname.new(note_rel_path).dirname
+
       backlinks_md = +"## Backlinks\n\n"
       source_ids.each do |id|
         info = id_to_path_title[id] || { path: id, title: id }
-        path = info[:path]
+        source_rel_path = info[:path]
         title = info[:title]
-        title = File.basename(path, '.md') if title.empty?
+        title = File.basename(source_rel_path, '.md') if title.empty?
         title = id if title.empty?
+
+        # Compute relative path from note's directory to source file
+        source_pathname = Pathname.new(source_rel_path)
+        relative_path = source_pathname.relative_path_from(note_dir).to_s
+
         # Minimal escaping so [link text](url) is valid CommonMark (\] in text, \) in url)
         text_esc = title.to_s.gsub('\\', '\\\\').gsub(']', '\\]')
-        url_esc = path.to_s.gsub('\\', '\\\\').gsub(')', '\\)')
+        url_esc = relative_path.to_s.gsub('\\', '\\\\').gsub(')', '\\)')
         backlinks_md << "- [#{text_esc}](#{url_esc})\n"
       end
       new_body = (kept_md + "\n\n" + backlinks_md).strip

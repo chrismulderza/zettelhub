@@ -6,6 +6,8 @@ require 'securerandom'
 require 'sqlite3'
 require 'pathname'
 require 'commonmarker'
+require 'json'
+require 'ostruct'
 require_relative 'config'
 
 # Shared utilities: link extraction and resolution, front matter parsing, path/template helpers, and shell command checks.
@@ -35,16 +37,21 @@ module Utils
   end
 
   # Resolves a wikilink target (id, title, or alias) to a note id using the index db. Returns note_id or nil.
+  # Handles both bare targets ("id") and display text format ("id|Display Name").
   def self.resolve_wikilink_to_id(link_text, db)
     return nil if link_text.to_s.strip.empty?
     inner = link_text.to_s.strip
+    
+    # Handle "id|Display Name" format - extract just the target part before |
+    target = inner.include?('|') ? inner.split('|', 2).first.strip : inner
+    
     # By id (8-char hex)
-    if inner =~ /\A[a-f0-9]{8}\z/i
-      row = db.execute('SELECT id FROM notes WHERE id = ?', [inner]).first
+    if target =~ /\A[a-f0-9]{8}\z/i
+      row = db.execute('SELECT id FROM notes WHERE id = ?', [target]).first
       return row[0] if row
     end
     # By title (case-insensitive)
-    row = db.execute('SELECT id FROM notes WHERE LOWER(TRIM(title)) = LOWER(?)', [inner]).first
+    row = db.execute('SELECT id FROM notes WHERE LOWER(TRIM(title)) = LOWER(?)', [target]).first
     return row[0] if row
     # By alias (metadata.aliases can be string or array)
     db.execute('SELECT id, metadata FROM notes').each do |id, meta_json|
@@ -53,7 +60,7 @@ module Utils
       aliases = meta['aliases']
       next if aliases.nil?
       aliases = [aliases] unless aliases.is_a?(Array)
-      return id if aliases.any? { |a| a.to_s.strip.casecmp(inner) == 0 }
+      return id if aliases.any? { |a| a.to_s.strip.casecmp(target) == 0 }
     end
     nil
   end
@@ -389,15 +396,101 @@ module Utils
     meta[key_s] || meta[attribute_key.to_sym]
   end
 
-  # Rebuilds markdown with YAML front matter and validated body via CommonMarker.
+  # Rebuilds markdown with YAML front matter and body.
   # Used when updating note front matter (e.g. tags) without changing the template.
+  # Note: Does not use CommonMarker for body to preserve wikilinks [[id|title]] unescaped.
   def self.reconstruct_note_content(metadata, body)
     front_matter_yaml = metadata.to_yaml.sub(/^---\n/, '')
-    body_doc = Commonmarker.parse(body)
-    validated_body = body_doc.to_commonmark
-    markdown_string = "---\n#{front_matter_yaml}---\n\n#{validated_body}"
-    final_doc = Commonmarker.parse(markdown_string, options: { extension: { front_matter_delimiter: '---' } })
-    final_doc.to_commonmark
+    # Ensure body has proper spacing
+    body_content = body.to_s.strip
+    body_content = "\n#{body_content}" unless body_content.empty?
+    "---\n#{front_matter_yaml}---\n#{body_content}\n"
+  end
+
+  # Extracts note ID from wikilink "[[id|title]]", "[[id]]", or bare "id|title".
+  # Returns the ID string or nil if not a valid wikilink.
+  def self.extract_id_from_wikilink(wikilink)
+    return nil if wikilink.to_s.strip.empty?
+
+    str = wikilink.to_s.strip
+    # Try standard wikilink format first: [[id|title]] or [[id]]
+    if (match = str.match(/\[\[([^\]|]+)/))
+      return match[1].strip
+    end
+    # Handle bare format without brackets: "id|title" or just "id"
+    if (match = str.match(/^([^|]+)/))
+      return match[1].strip
+    end
+    nil
+  end
+
+  # Extracts title from wikilink "[[id|title]]".
+  # Returns the title string or the ID if no title present.
+  def self.extract_title_from_wikilink(wikilink)
+    return nil if wikilink.to_s.empty?
+
+    if (match = wikilink.match(/\[\[([^\]|]+)\|([^\]]+)\]\]/))
+      match[2].strip
+    elsif (match = wikilink.match(/\[\[([^\]]+)\]\]/))
+      match[1].strip
+    else
+      nil
+    end
+  end
+
+  # Returns the parent organization ID from a note's metadata.
+  def self.parent_org_id(note)
+    extract_id_from_wikilink(note.metadata['parent'])
+  end
+
+  # Returns array of subsidiary IDs from a note's metadata.
+  # Handles both string wikilinks and nested arrays.
+  def self.subsidiary_ids(note)
+    subs = Array(note.metadata['subsidiaries']).flatten
+    subs.map { |link| extract_id_from_wikilink(link.to_s) }.compact
+  end
+
+  # Returns array of all ancestor IDs (parent, grandparent, etc.) for an organization.
+  # Traverses up the hierarchy until no parent is found.
+  def self.ancestor_ids(note, db)
+    ancestors = []
+    current_id = parent_org_id(note)
+    while current_id
+      ancestors << current_id
+      parent_note = load_note_by_id(db, current_id)
+      break unless parent_note
+
+      current_id = parent_org_id(parent_note)
+    end
+    ancestors
+  end
+
+  # Returns array of all descendant IDs (children, grandchildren, etc.) for an organization.
+  # Traverses down the hierarchy using BFS.
+  def self.descendant_ids(note, db)
+    descendants = []
+    queue = subsidiary_ids(note)
+    while queue.any?
+      child_id = queue.shift
+      descendants << child_id
+      child_note = load_note_by_id(db, child_id)
+      next unless child_note
+
+      queue.concat(subsidiary_ids(child_note))
+    end
+    descendants
+  end
+
+  # Loads a note's metadata from the database by ID.
+  # Returns a struct-like object with metadata hash, or nil if not found.
+  def self.load_note_by_id(db, note_id)
+    row = db.execute('SELECT id, path, title, metadata FROM notes WHERE id = ?', [note_id]).first
+    return nil unless row
+
+    meta = JSON.parse(row[3] || '{}')
+    OpenStruct.new(id: row[0], path: row[1], title: row[2], metadata: meta)
+  rescue JSON::ParserError
+    nil
   end
 
   # Normalizes text to a slug: lowercased, non-alphanumeric replaced, collapsed/trimmed.

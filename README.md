@@ -88,6 +88,9 @@ using templates. The bundled templates include:
 - A daily journal type
 - A meeting type
 - A general note type
+- A person (contact) type
+- An organization type
+- A bookmark type
 
 `ZettelHub` is configured using a YAML configuration file named `config.yaml`
 stored in a directory named `ZettelHub` under the default XDG configuration
@@ -114,6 +117,9 @@ Attributes: - id: - title: - type: - path: - date:
   - **Meeting**: Meeting notes class (extends Note)
   - **Resource** (extends Document)
     - Bookmark : (extends Resource)
+  - **Person**: Contact/people management (extends Document)
+  - **Organization**: Companies, institutions, groups (extends Document)
+    - Account : Customer accounts (extends Organization)
 
 ### Template files
 
@@ -259,12 +265,93 @@ results to stdout instead. Filter by type, tag, date, and path.
 ### Tag management
 
 - **`zh tags`** – List all tags with note counts.
+- **`zh tags --source frontmatter`** – List only front matter tags.
+- **`zh tags --source body`** – List only body hashtags.
 - **`zh tag add TAG NOTE_ID`** – Add a tag to a note (by id).
 - **`zh tag remove TAG NOTE_ID`** – Remove a tag from a note.
 - **`zh tag rename OLD_TAG NEW_TAG`** – Rename a tag across all notes.
 
+Tags are stored in a unified index from two sources: front matter (`tags: [...]`)
+and body hashtags (`#tagname`). The `zh tags` command shows tag counts with their
+source(s).
+
 Example: `zh tag add work abc12345` adds the tag "work" to the note with id
 `abc12345`.
+
+### Contact Management (Person)
+
+- **`zh person`** – Interactive contact browser (fzf).
+- **`zh person add`** – Create a new contact (prompts for details).
+- **`zh person list`** – List all contacts in table format.
+- **`zh person list --json`** – Output contacts as JSON.
+- **`zh person import FILE`** – Import contacts from vCard (.vcf) file.
+- **`zh person export`** – Export contacts to vCard format.
+- **`zh person birthdays`** – Show upcoming birthdays.
+- **`zh person stale`** – Show contacts not recently contacted.
+- **`zh person merge ID1 ID2`** – Merge duplicate contacts.
+
+Contacts support `@Name` aliases for concise wikilink references: `[[@John Doe]]`.
+
+### Organization Management
+
+- **`zh org`** – Interactive organization browser.
+- **`zh org add`** – Create new organization.
+- **`zh org add --type account`** – Create new customer account.
+- **`zh org list`** – List all organizations/accounts.
+- **`zh org tree NOTE_ID`** – Display organization hierarchy tree.
+- **`zh org parent NOTE_ID`** – Show parent organization.
+- **`zh org subs NOTE_ID`** – List direct subsidiaries.
+- **`zh org ancestors NOTE_ID`** – List all ancestor organizations.
+- **`zh org descendants NOTE_ID`** – List all descendants.
+
+Organizations support parent/subsidiary relationships via wikilinks in metadata.
+
+### Theming
+
+ZettelHub provides a unified theming system that applies consistent colors across
+all CLI tools (gum, fzf, bat, glow, ripgrep).
+
+**Built-in themes:**
+- `nord` - Arctic, north-bluish palette (default)
+- `dracula` - Dark theme with vibrant colors
+- `tokyo-night` - Clean dark theme, Tokyo lights
+- `gruvbox` - Retro groove, warm tones
+- `catppuccin` - Soothing pastel (Mocha variant)
+
+**Theme commands:**
+- **`zh theme list`** - List available themes
+- **`zh theme preview NAME`** - Preview theme colors in terminal
+- **`zh theme export NAME`** - Output shell environment variables
+- **`zh theme apply NAME`** - Write config files (glow style, etc.)
+
+**Configuration:**
+
+Set theme in `config.yaml`:
+```yaml
+theme: nord
+```
+
+Or customize with a full palette:
+```yaml
+theme:
+  name: custom
+  palette:
+    accent: "#88C0D0"
+    accent_secondary: "#81A1C1"
+    # ... see examples/config/config.yaml for all keys
+```
+
+**Shell integration:**
+
+Add to `~/.bashrc` or `~/.zshrc`:
+```bash
+eval "$(zh theme export)"
+```
+
+For fish shell, add to `~/.config/fish/config.fish`:
+```fish
+zh theme export --fish | source
+```
 
 ### Version control (Git integration)
 
@@ -349,6 +436,9 @@ zh git sync
   - `lib/models/note.rb` is the base note class definition for the default note.
     This class extends `document.rb` which is an abstract class. All other note
     types inherit from this base class.
+  - `lib/models/person.rb` – Contact/people management model.
+  - `lib/models/organization.rb` – Organization model with hierarchy support.
+  - `lib/models/account.rb` – Customer accounts (extends Organization).
 
 ## Documentation
 
@@ -365,6 +455,12 @@ extension points, see:
     [examples/config/config.yaml](examples/config/config.yaml) and
     [lib/config.rb](lib/config.rb))
   - Future architecture considerations
+- [docs/NEOVIM_INTEGRATION.md](docs/NEOVIM_INTEGRATION.md): Neovim editor
+  integration with `nvim-cmp` completion and Telescope pickers for wikilinks,
+  `@person` mentions, and `#tags`.
+- [docs/ENHANCEMENTS_PLAN.md](docs/ENHANCEMENTS_PLAN.md): Detailed plan for
+  contact management, dynamic templates, organization hierarchy, and editor
+  integration.
 
 > [!NOTE]
 > The majority of this documentation has been generated by a coding

@@ -33,6 +33,8 @@ graph TB
     CLI --> HistoryCmd[lib/cmd/history.rb<br/>HistoryCommand]
     CLI --> DiffCmd[lib/cmd/diff.rb<br/>DiffCommand]
     CLI --> RestoreCmd[lib/cmd/restore.rb<br/>RestoreCommand]
+    CLI --> PersonCmd[lib/cmd/person.rb<br/>PersonCommand]
+    CLI --> OrgCmd[lib/cmd/org.rb<br/>OrgCommand]
     
     AddCmd --> Config[lib/config.rb<br/>Config]
     AddCmd --> Utils[lib/utils.rb<br/>Utils]
@@ -109,6 +111,19 @@ graph TB
     Document --> Meeting[lib/models/meeting.rb<br/>Meeting]
     Document --> Resource[lib/models/resource.rb<br/>Resource]
     Resource --> Bookmark[lib/models/bookmark.rb<br/>Bookmark]
+    Document --> Person[lib/models/person.rb<br/>Person]
+    Document --> Organization[lib/models/organization.rb<br/>Organization]
+    Organization --> Account[lib/models/account.rb<br/>Account]
+    
+    PersonCmd --> Config
+    PersonCmd --> Utils
+    PersonCmd --> SQLite
+    PersonCmd --> Person
+    PersonCmd --> VcfParser[lib/vcf_parser.rb<br/>VcfParser]
+    OrgCmd --> Config
+    OrgCmd --> Utils
+    OrgCmd --> SQLite
+    OrgCmd --> Organization
     
     Indexer --> SQLite
     
@@ -242,6 +257,9 @@ config:
     path: "<%= id %>-<%= title %>.md"  # ✓ Correct: quoted
     path: <%= id %>-<%= title %>.md     # ✗ Wrong: unquoted (will fail with special chars)
 ```
+
+**ERB Rendering Isolation**:
+Template rendering is performed in an isolated method (`render_erb_with_context`) to avoid Ruby variable shadowing. Method parameters like `title: nil` would otherwise shadow `context.title` in the ERB binding, causing template variables to render as empty. See [AGENTS.md](AGENTS.md#erb-variable-shadowing-in-template-rendering) for details.
 
 **Filename Normalization with `slugify`**:
 Templates have access to a `slugify` function that can be used to normalize strings for
@@ -439,6 +457,35 @@ via the `engine.default_alias` option in `config.yaml` and supports variables: `
 
 **Storage**: Bookmarks use the same notes table and indexer; no separate bookmarks table. Template type is `bookmark`; model is Bookmark (extends Resource).
 
+#### PersonCommand (`lib/cmd/person.rb`)
+
+**Responsibilities**:
+- **No subcommand (browse)**: Interactive contact browser using fzf with preview
+- **add**: Create new contact using person template with dynamic prompts
+- **list**: List all contacts in table or JSON format
+- **import FILE**: Import contacts from vCard (.vcf) file using VcfParser
+- **export**: Export contacts to vCard format
+- **birthdays**: Show upcoming birthdays within configurable days
+- **stale**: Show contacts not contacted recently (configurable threshold)
+- **merge ID1 ID2**: Merge duplicate contacts (keeps first, updates links)
+
+**VCF Interoperability**: Uses `lib/vcf_parser.rb` for import/export with standard vCard format.
+
+#### OrgCommand (`lib/cmd/org.rb`)
+
+**Responsibilities**:
+- **No subcommand (browse)**: Interactive organization browser using fzf
+- **add**: Create new organization using organization template
+- **add --type account**: Create new customer account using account template
+- **list**: List all organizations/accounts in table or JSON format
+- **tree NOTE_ID**: Display organization hierarchy as ASCII tree
+- **parent NOTE_ID**: Show parent organization
+- **subs NOTE_ID**: List direct subsidiaries
+- **ancestors NOTE_ID**: List all ancestor organizations
+- **descendants NOTE_ID**: List all descendant organizations
+
+**Hierarchy Support**: Uses `parent` and `subsidiaries` metadata fields containing wikilinks. Hierarchy traversal uses `Utils.ancestor_ids` and `Utils.descendant_ids`.
+
 ### 3. Model Layer (`lib/models/`)
 
 **Purpose**: Represent note documents and their metadata
@@ -481,6 +528,9 @@ via the `engine.default_alias` option in `config.yaml` and supports variables: `
 - **Meeting** (`lib/models/meeting.rb`): Extends Note (currently empty, extension point)
 - **Resource** (`lib/models/resource.rb`): Extends Document; file-based base for resource-type documents (sibling of Note).
 - **Bookmark** (`lib/models/bookmark.rb`): Extends Resource; has `uri` from metadata. Bookmarks are notes with `type: bookmark` in the same notes table and FTS index.
+- **Person** (`lib/models/person.rb`): Extends Document; contact/people management with accessors for `full_name`, `emails`, `phones`, `organization`, `role`, `birthday`, `social`, `relationships`, `last_contact`. Supports `@Name` alias format for concise wikilinks.
+- **Organization** (`lib/models/organization.rb`): Extends Document; organization management with hierarchy support via `parent` and `subsidiaries` wikilink fields. Includes `parent_id` and `subsidiary_ids` methods for ID extraction.
+- **Account** (`lib/models/account.rb`): Extends Organization; customer accounts. Custom fields (CRM data, revenue, etc.) are accessed via the generic `metadata` hash, keeping the model domain-agnostic.
 
 ### 4. Service Layer
 
@@ -537,8 +587,23 @@ CREATE TABLE links (
   link_type TEXT,   -- 'wikilink' or 'markdown'
   context TEXT
 );
+
+CREATE TABLE tags (
+  note_id TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'frontmatter',
+  PRIMARY KEY (note_id, tag, source)
+);
 -- Indexes on source_id and target_id for outgoing and backlink queries.
+-- Indexes on tags.tag, tags.note_id, tags.source for efficient lookups.
 ```
+
+**Unified Tag Storage**:
+All tags are stored in a single `tags` table with a `source` column indicating origin:
+- `frontmatter`: Tags from YAML front matter (`tags: [...]`)
+- `body`: Hashtags extracted from note body (`#tagname`)
+
+Body hashtag extraction is configurable via `tags.extract_body_hashtags` (default: true), with exclusion patterns and length limits. The `zh tags` command queries this unified table and shows tag sources.
 
 **Storage Strategy**:
 - Stores relative paths from notebook root
@@ -574,6 +639,136 @@ CREATE TABLE links (
 
 **Auto-commit Integration**:
 Commands (`AddCommand`, `TagCommand`, `ImportCommand`) check `Config.get_git_auto_commit(config)` after operations and call `GitService.commit` if enabled. If `auto_push` is also enabled, they push to the configured remote/branch.
+
+#### Template Variables (`lib/template_vars.rb`)
+
+**Purpose**: Resolve custom variables defined in template front matter
+
+**Responsibilities**:
+- Extract custom keys from YAML front matter (keys not in the standard set)
+- Detect variable dependencies via ERB tag scanning
+- Build dependency graph and perform topological sort
+- Resolve variables in dependency order using ERB rendering
+- Handle cyclic dependency detection with clear error messages
+
+**Key Methods**:
+- `extract_custom_keys(frontmatter)` - Find non-standard YAML keys
+- `detect_dependencies(value)` - Scan for `<%= var %>` references
+- `topological_sort(graph)` - Order variables by dependencies
+- `resolve_custom_vars(custom_keys, base_vars, slugify_proc:)` - Evaluate all custom variables
+
+#### Dynamic Prompts (`lib/prompt_*.rb`, `lib/option_source.rb`, etc.)
+
+**Purpose**: Interactive data collection defined in templates
+
+**Modules**:
+- **PromptCollector** (`lib/prompt_collector.rb`): Orchestrates prompt execution, condition evaluation, validation retry loops
+- **PromptExecutor** (`lib/prompt_executor.rb`): Executes individual prompts (input, write, choose, filter, confirm) using `gum` or stdin fallback
+- **ConditionEvaluator** (`lib/condition_evaluator.rb`): Evaluates `when` conditions for conditional prompts (`==`, `!=`, `=~`, `in`, `&&`, `||`, `?`)
+- **ValueTransformer** (`lib/value_transformer.rb`): Applies transformations to collected values (trim, lowercase, slugify, split, join, etc.)
+- **ValueValidator** (`lib/value_validator.rb`): Validates input against rules (required, type, pattern, min/max length)
+- **OptionSource** (`lib/option_source.rb`): Resolves dynamic options from sources (tags, notes, files, command)
+
+**Template Prompt Definition**:
+```yaml
+config:
+  prompts:
+    - key: title
+      type: input
+      prompt: "Meeting title"
+      required: true
+    - key: category
+      type: choose
+      prompt: "Select category"
+      source:
+        type: tags
+      required: true
+    - key: account
+      type: filter
+      prompt: "Related account"
+      optional: true           # Shows "Add Related account? [y/n]" first
+      source:
+        type: notes
+        filter_type: account
+        return: wikilink
+    - key: attendees
+      type: filter
+      prompt: "Select attendees"
+      optional: true
+      multi: true              # Allows selecting multiple items
+      source:
+        type: notes
+        filter_type: person
+        return: wikilink
+```
+
+**Prompt Flags**:
+- **`required: true`**: Field must have a value; re-prompts if empty
+- **`optional: true`**: Shows yes/no confirmation before prompting; if declined, uses default or nil
+- **`multi: true`**: For `choose` and `filter` types, allows selecting multiple items; returns array
+
+#### Theme (`lib/theme.rb`)
+
+**Purpose**: Unified color theming for CLI tools
+
+**Responsibilities**:
+- Load theme palettes (bundled and user-defined)
+- Generate tool-specific configurations (gum env vars, fzf colors, glow styles)
+- Export theme as shell environment variables
+- Preview themes in terminal with color swatches
+
+**Key Methods**:
+- `load(theme_name, debug:)` - Load theme by name (searches user then bundled)
+- `list` - List all available theme names
+- `gum_env(palette)` - Generate gum environment variables hash
+- `fzf_colors(palette)` - Generate fzf `--color` option string
+- `glow_style(palette, theme_name)` - Generate glow glamour style JSON
+- `ripgrep_colors(palette)` - Generate ripgrep color configuration
+- `export_shell(theme_data, format:)` - Export as shell script (:bash, :zsh, :fish)
+- `apply(theme_data, output_dir:)` - Write config files (glow style JSON)
+- `preview(theme_data)` - Preview colors in terminal
+
+**Built-in Themes** (`lib/themes/`):
+- `nord.yaml` - Arctic, north-bluish palette
+- `dracula.yaml` - Dark theme with vibrant colors
+- `tokyo-night.yaml` - Clean dark theme
+- `gruvbox.yaml` - Retro groove, warm tones
+- `catppuccin.yaml` - Soothing pastel (Mocha)
+
+**Palette Keys**:
+- `bg`, `bg_highlight`, `bg_selection` - Background colors
+- `fg`, `fg_muted` - Foreground colors
+- `accent`, `accent_secondary` - Accent colors
+- `success`, `warning`, `error`, `info` - Semantic colors
+- `match`, `comment` - Highlight colors
+
+#### ThemeCommand (`lib/cmd/theme.rb`)
+
+**Responsibilities**:
+- **list**: List available themes with descriptions
+- **current**: Show current theme from config
+- **preview NAME**: Preview theme colors in terminal
+- **export NAME**: Output shell environment variables
+- **apply NAME**: Write config files (glow style, etc.)
+
+**Shell Integration**:
+- Bash/Zsh: `eval "$(zh theme export)"`
+- Fish: `zh theme export --fish | source`
+
+#### VCF Parser (`lib/vcf_parser.rb`)
+
+**Purpose**: vCard import/export for contact interoperability
+
+**Responsibilities**:
+- Parse vCard 3.0/4.0 files to Ruby hashes
+- Handle property parameters, escaped characters, folded lines
+- Normalize contact data structure
+- Export Person notes to vCard format
+
+**Key Methods**:
+- `parse_file(filepath)` - Parse VCF file, return array of contact hashes
+- `parse(content)` - Parse VCF string content
+- `to_vcard(contact, version:)` - Convert contact hash to VCF string
 
 ### 5. Utility Layer (`lib/utils.rb`)
 
@@ -635,9 +830,18 @@ Commands (`AddCommand`, `TagCommand`, `ImportCommand`) check `Config.get_git_aut
 - **`note_path_by_id(config, id)`**: Returns the absolute path of the note file for the given note ID by querying the index, or nil if not found. Used by TagCommand (and future update/delete commands).
 - **`get_metadata_attribute(db_path, document_id, attribute_key)`**: Returns a single metadata attribute for a document by id (e.g. `uri` for bookmarks), or nil. Used by BookmarkCommand to resolve a bookmark’s URI after the user selects by id in the interactive browser.
 
-- **Link helpers** (shared by indexer, import, and links/backlinks/graph commands): `WIKILINK_PATTERN`, `MARKDOWN_LINK_PATTERN`; `extract_wikilinks(body)`, `extract_markdown_link_urls(body)`; `resolve_wikilink_to_id(link_text, db)` (by id, title, or alias); `resolve_markdown_path_to_id(url, current_note_path, notebook_path, db)`; `rewrite_markdown_links_for_rename(body, source_note_path, notebook_path, old_rel_path, new_rel_path)` for reindex rename; `resolve_link_target_to_new_path` and `resolve_markdown_links_with_mapping` for import path mapping.
+- **Link helpers** (shared by indexer, import, and links/backlinks/graph commands): `WIKILINK_PATTERN`, `MARKDOWN_LINK_PATTERN`; `extract_wikilinks(body)`, `extract_markdown_link_urls(body)`; `resolve_wikilink_to_id(link_text, db)` (by id, title, or alias; handles `id|display_text` format by parsing out the target before `|`); `resolve_markdown_path_to_id(url, current_note_path, notebook_path, db)`; `rewrite_markdown_links_for_rename(body, source_note_path, notebook_path, old_rel_path, new_rel_path)` for reindex rename; `resolve_link_target_to_new_path` and `resolve_markdown_links_with_mapping` for import path mapping.
 
 - **`reconstruct_note_content(metadata, body)`**: Rebuilds Markdown with YAML front matter and validated body via CommonMarker. Used when updating note front matter (e.g. tags) without changing the template. Used by AddCommand and TagCommand.
+
+- **Hierarchy helpers** (for organization parent/subsidiary relationships):
+  - `extract_id_from_wikilink(wikilink)`: Extracts ID from `[[id|title]]` or `[[id]]` format
+  - `extract_title_from_wikilink(wikilink)`: Extracts title (or ID if no title) from wikilink
+  - `parent_org_id(note)`: Returns parent organization ID from note's `parent` field
+  - `subsidiary_ids(note)`: Returns array of subsidiary IDs from note's `subsidiaries` field
+  - `ancestor_ids(note, db)`: Traverses up the hierarchy to find all ancestor IDs
+  - `descendant_ids(note, db)`: Traverses down the hierarchy to find all descendant IDs
+  - `load_note_by_id(db, note_id)`: Loads note metadata from database into OpenStruct
 
 ### Debugging output
 
@@ -788,18 +992,51 @@ ZettelHub/
 │   │   ├── add.rb            # Add command
 │   │   ├── init.rb           # Init command
 │   │   ├── journal.rb        # Journal command (today, yesterday, journal DATE)
+│   │   ├── person.rb         # Person/contact command
+│   │   ├── org.rb            # Organization/account command
+│   │   └── ...               # Other commands
 │   ├── models/                # Data models
 │   │   ├── document.rb       # Base Document class
 │   │   ├── note.rb           # Base Note class
 │   │   ├── journal.rb        # Journal type (extends Note)
 │   │   ├── meeting.rb        # Meeting type (extends Note)
 │   │   ├── resource.rb       # Resource base (extends Document)
-│   │   └── bookmark.rb       # Bookmark type (extends Resource)
+│   │   ├── bookmark.rb       # Bookmark type (extends Resource)
+│   │   ├── person.rb         # Person/contact (extends Document)
+│   │   ├── organization.rb   # Organization (extends Document)
+│   │   └── account.rb        # Account (extends Organization)
 │   ├── config.rb             # Configuration management
-│   ├── indexer.rb            # SQLite indexing
-│   ├── utils.rb              # Utility functions
+│   ├── indexer.rb            # SQLite indexing + body hashtag extraction
+│   ├── utils.rb              # Utility functions + hierarchy helpers
+│   ├── template_vars.rb      # Custom template variable resolution
+│   ├── prompt_collector.rb   # Dynamic prompt collection orchestration
+│   ├── prompt_executor.rb    # Individual prompt execution
+│   ├── condition_evaluator.rb # Prompt condition evaluation
+│   ├── value_transformer.rb  # Value transformation (trim, slugify, etc.)
+│   ├── value_validator.rb    # Input validation (email, url, etc.)
+│   ├── option_source.rb      # Dynamic option source resolution
+│   ├── vcf_parser.rb         # vCard import/export
+│   ├── theme.rb              # Unified theme system
+│   ├── themes/               # Theme presets
+│   │   ├── nord.yaml
+│   │   ├── dracula.yaml
+│   │   ├── tokyo-night.yaml
+│   │   ├── gruvbox.yaml
+│   │   └── catppuccin.yaml
 │   └── templates/
-│       └── note.erb       # Default template
+│       ├── note.erb          # Default note template
+│       ├── person.erb        # Person/contact template
+│       ├── organization.erb  # Organization template
+│       └── ...               # Other templates
+├── nvim/                      # Neovim integration
+│   └── lua/zettelhub/        # Lua plugin
+│       ├── init.lua          # Core module
+│       ├── cmp.lua           # nvim-cmp completion source
+│       ├── telescope.lua     # Telescope pickers
+│       └── setup.lua         # Plugin setup/keymaps
+├── docs/                      # Documentation
+│   ├── ENHANCEMENTS_PLAN.md  # Feature enhancement plan
+│   └── NEOVIM_INTEGRATION.md # Neovim setup guide
 ├── test/                      # Test suite
 │   ├── cmd/                  # Command tests
 │   ├── models/               # Model tests
@@ -812,10 +1049,11 @@ ZettelHub/
 
 ### External Tools
 
-- **gum**: Interactive CLI prompts (planned/future use)
-- **fzf**: Fuzzy finder (planned/future use)
-- **ripgrep**: Fast text search (planned/future use)
+- **gum**: Interactive CLI prompts for dynamic template prompts (input, choose, filter, confirm); stdin fallback if unavailable
+- **fzf**: Fuzzy finder for interactive search, find, and browse commands
+- **ripgrep**: Fast text search for search command
 - **glow**: Markdown preview for interactive search (uses bundled themes in `lib/themes/glow/`)
+- **bat**: Syntax-highlighted file preview (optional; fallback to cat)
 - **sqlite**: Database operations (via sqlite3 gem)
 
 ### Ruby Gems

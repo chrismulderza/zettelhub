@@ -1,0 +1,68 @@
+---
+id: "<%= id %>"
+type: organization
+date: "<%= date %>"
+title: "<%= name %>"
+name: "<%= name %>"
+aliases: ["org> <%= name %>"]
+tags: <%= tags %>
+website: "<%= website %>"
+industry: "<%= industry %>"
+address: "<%= address %>"
+parent: "<%= parent %>"
+subsidiaries: <%= subsidiaries %>
+config:
+  path: "organizations/<%= slugify(name) %>-<%= id %>.md"
+  default_tags: [organization]
+  prompts:
+    - key: name
+      type: input
+      prompt: "Organization name"
+      required: true
+    - key: website
+      type: input
+      prompt: "Website URL"
+      optional: true
+    - key: industry
+      type: input
+      prompt: "Industry/Sector"
+      optional: true
+    - key: address
+      type: input
+      prompt: "Address"
+      optional: true
+    - key: parent
+      type: filter
+      prompt: "Parent organization"
+      optional: true
+      source:
+        type: notes
+        filter_type: "organization|account"
+        return: wikilink
+---
+
+# <%= name %>
+
+## Organization Information
+<% unless website.to_s.empty? %>
+
+**Website**: [<%= website %>](<%= website %>)
+<% end %>
+<% unless industry.to_s.empty? %>
+
+**Industry**: <%= industry %>
+<% end %>
+<% unless address.to_s.empty? %>
+
+**Address**: <%= address %>
+<% end %>
+<% unless parent.to_s.empty? %>
+
+**Parent**: <%= parent %>
+<% end %>
+
+## Subsidiaries
+
+## Notes
+
+<%= content %>

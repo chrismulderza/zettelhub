@@ -1,0 +1,31 @@
+# Tokyo Night Theme
+# A clean, dark theme inspired by Tokyo city lights.
+# https://github.com/enkia/tokyo-night-vscode-theme
+
+name: tokyo-night
+description: A clean dark theme inspired by Tokyo city lights
+bat_theme: base16
+
+palette:
+  # Background colors
+  bg: "#1A1B26"
+  bg_highlight: "#24283B"
+  bg_selection: "#33467C"
+  
+  # Foreground colors
+  fg: "#A9B1D6"
+  fg_muted: "#565F89"
+  
+  # Accent colors
+  accent: "#7AA2F7"           # Blue - primary accent
+  accent_secondary: "#BB9AF7" # Purple - secondary accent
+  
+  # Semantic colors
+  success: "#9ECE6A"          # Green
+  warning: "#E0AF68"          # Orange/Yellow
+  error: "#F7768E"            # Red/Pink
+  info: "#7DCFFF"             # Cyan
+  
+  # Highlights
+  match: "#E0AF68"            # Orange for search matches
+  comment: "#565F89"          # Muted for comments

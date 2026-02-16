@@ -7,10 +7,12 @@ require_relative '../models/note'
 require_relative '../utils'
 require_relative '../debug'
 require_relative '../git_service'
+require_relative '../prompt_collector'
 require 'erb'
 require 'fileutils'
 require 'ostruct'
 require 'commonmarker'
+require 'yaml'
 
 # Add command for creating new notes
 class AddCommand
@@ -26,28 +28,6 @@ class AddCommand
     type, title, tags, description, title_provided, tags_provided, description_provided = parse_args(args)
     debug_print("Type: #{type}")
 
-    # Prompt for missing values only if they were not explicitly provided
-    # Empty strings are treated as "explicitly provided but empty" (no prompt)
-    if !title_provided && !tags_provided
-      # Neither provided, prompt for both and for description
-      title, tags = prompt_interactive
-      description = prompt_description unless description_provided
-    elsif !title_provided
-      # Only tags provided, prompt for title
-      title = prompt_title
-      description = prompt_description unless description_provided
-    elsif !tags_provided
-      # Only title provided, prompt for tags
-      tags = prompt_tags
-      description = prompt_description unless description_provided
-    end
-
-    # Use defaults if still nil
-    title ||= ''
-    tags = parse_tags(tags) if tags.is_a?(String)
-    tags ||= []
-    description ||= ''
-
     config = Config.load(debug: debug?)
     REQUIRED_TOOLS.each do |tool_key|
       executable = Config.get_tool_command(config, tool_key)
@@ -58,17 +38,49 @@ class AddCommand
 
     template_config = get_template_config(config, type)
     template_file = find_template_file(config['notebook_path'], template_config['template_file'])
-    content = render_template(template_file, type, title: title, tags: tags, description: description, config: config)
+
+    # Extract config.prompts from template to check if template has dynamic prompts
+    template_prompts = extract_template_prompts(template_file)
+
+    if template_prompts && !template_prompts.empty?
+      # Template has dynamic prompts - use PromptCollector
+      debug_print("Template has #{template_prompts.size} dynamic prompt(s)")
+      content = render_template_with_prompts(template_file, type, config, template_prompts,
+                                              title: title, tags: tags, description: description,
+                                              title_provided: title_provided, tags_provided: tags_provided,
+                                              description_provided: description_provided)
+    else
+      # No dynamic prompts - use legacy interactive prompts
+      debug_print("Template has no dynamic prompts, using legacy prompts")
+      if !title_provided && !tags_provided
+        title, tags = prompt_interactive
+        description = prompt_description unless description_provided
+      elsif !title_provided
+        title = prompt_title
+        description = prompt_description unless description_provided
+      elsif !tags_provided
+        tags = prompt_tags
+        description = prompt_description unless description_provided
+      end
+
+      title ||= ''
+      tags = parse_tags(tags) if tags.is_a?(String)
+      tags ||= []
+      description ||= ''
+
+      content = render_template(template_file, type, title: title, tags: tags, description: description, config: config)
+    end
+
     filepath = create_note_file(config, template_config, type, content)
     puts "Note created: #{filepath}"
 
     editor_cmd = build_editor_command(config, File.expand_path(filepath), '1')
     system(editor_cmd)
-    #Call index_note after edit to update index with new content
+    # Call index_note after edit to update index with new content
     index_note(config, filepath)
 
     # Auto-commit if enabled
-    auto_commit_note(config, filepath, title)
+    auto_commit_note(config, filepath, title || '')
   end
 
   # Public API: parses front matter, applies config.path or filename_pattern, writes file, indexes, returns path.
@@ -78,8 +90,25 @@ class AddCommand
     input_tags = metadata['tags'] || []
     metadata['tags'] = (Array(default_tags) + Array(input_tags)).uniq
     variables = build_variables(type, content)
-    effective_pattern = metadata.dig('config', 'default_alias') || Config.get_engine_default_alias(config)
-    metadata['aliases'] = Utils.interpolate_pattern(effective_pattern, variables)
+
+    # Handle aliases:
+    # 1. If template has config.default_alias, generate from that pattern
+    # 2. Else if template rendered an array of aliases, keep them
+    # 3. Else generate from global config pattern
+    template_alias_pattern = metadata.dig('config', 'default_alias')
+    existing_aliases = metadata['aliases']
+
+    if template_alias_pattern
+      # Template specifies alias pattern - use it
+      metadata['aliases'] = Utils.interpolate_pattern(template_alias_pattern, variables)
+    elsif existing_aliases.is_a?(Array) && existing_aliases.any?
+      # Template rendered array of aliases - keep them
+      metadata['aliases'] = existing_aliases
+    else
+      # Generate from global config pattern
+      effective_pattern = Config.get_engine_default_alias(config)
+      metadata['aliases'] = Utils.interpolate_pattern(effective_pattern, variables)
+    end
 
     # Remove config from metadata and reconstruct content (updated aliases/tags, no config block)
     metadata_without_config = metadata.dup
@@ -102,6 +131,16 @@ class AddCommand
   end
 
   private
+
+  # Renders ERB template with vars in isolated scope to avoid variable shadowing.
+  # Method parameters like 'title' in caller would shadow context.title in ERB binding.
+  def render_erb_with_context(template_file, vars, config)
+    template = ERB.new(File.read(template_file))
+    context = OpenStruct.new(vars)
+    replacement_char = Config.get_engine_slugify_replacement(config)
+    context.define_singleton_method(:slugify) { |text| Utils.slugify(text, replacement_char: replacement_char) }
+    template.result(context.instance_eval { binding })
+  end
 
   def build_editor_command(config, filepath, line = '1')
     executable = Config.get_tool_command(config, 'editor')
@@ -221,16 +260,18 @@ class AddCommand
     "[#{tags.map { |t| "\"#{t.to_s.gsub('"', '\\"')}\"" }.join(', ')}]"
   end
 
-  # Prints completion candidates (template types) for shell completion.
+  # Prints completion candidates (template types and options) for shell completion.
   def output_completion
+    options = '--title --tags --description --help -h'
     begin
       config = Config.load(debug: debug?)
       types = Config.template_types(config)
       debug_print("Completion: available template types: #{types.join(', ')}")
-      puts types.empty? ? Config.default_template_types.join(' ') : types.join(' ')
+      types_str = types.empty? ? Config.default_template_types.join(' ') : types.join(' ')
+      puts "#{types_str} #{options}"
     rescue StandardError => e
       debug_print("Completion: error loading config: #{e.message}")
-      puts Config.default_template_types.join(' ')
+      puts "#{Config.default_template_types.join(' ')} #{options}"
     end
   end
 
@@ -287,6 +328,78 @@ class AddCommand
     template_file = Utils.find_template_file!(notebook_path, template_filename, debug: debug?)
     debug_print("Template file found: #{template_file}")
     template_file
+  end
+
+  # Extracts config.prompts from template's YAML front matter.
+  # Returns array of prompt definitions or nil.
+  def extract_template_prompts(template_file)
+    content = File.read(template_file)
+    return nil unless content.start_with?('---')
+
+    # Extract YAML front matter
+    parts = content.split(/^---\s*$/, 3)
+    return nil if parts.size < 2
+
+    begin
+      frontmatter = YAML.safe_load(parts[1], permitted_classes: [Symbol])
+      frontmatter&.dig('config', 'prompts')
+    rescue StandardError
+      nil
+    end
+  end
+
+  # Renders template with dynamic prompts from config.prompts.
+  # Collects values via PromptCollector, then renders ERB with all variables.
+  def render_template_with_prompts(template_file, type, config, prompt_defs,
+                                    title: nil, tags: nil, description: nil,
+                                    title_provided: false, tags_provided: false,
+                                    description_provided: false)
+    # Build initial variables (time vars, etc.)
+    date_format = Config.get_engine_date_format(config)
+    vars = Utils.current_time_vars(date_format: date_format)
+    vars['type'] = type
+    vars['content'] = ''
+
+    # Build provided values from CLI args
+    provided_values = {}
+    provided_values['title'] = title if title_provided && title
+    provided_values['tags'] = parse_tags(tags) if tags_provided && tags
+    provided_values['description'] = description if description_provided
+
+    # Collect values from prompts
+    debug_print("Collecting values from #{prompt_defs.size} prompt(s)")
+    collected = PromptCollector.collect(prompt_defs, config, vars, provided_values)
+    debug_print("Collected: #{collected.keys.join(', ')}")
+
+    # Merge collected values into vars
+    vars.merge!(collected)
+
+    # Ensure standard fields have defaults
+    vars['title'] ||= ''
+    vars['tags'] ||= []
+    vars['tags'] = format_tags_for_yaml(vars['tags']) if vars['tags'].is_a?(Array)
+    vars['description'] ||= ''
+
+    # Generate alias
+    alias_pattern = Config.get_engine_default_alias(config)
+    vars['aliases'] = Utils.interpolate_pattern(alias_pattern, vars)
+
+    # Render template in separate method to avoid local variable shadowing
+    # (method params like 'title' would shadow context.title in ERB binding)
+    rendered = render_erb_with_context(template_file, vars, config)
+    
+    # Extract the rendered config.path to show what filename will be used
+    if rendered =~ /^---\s*\n(.*?)\n---/m
+      begin
+        rendered_frontmatter = YAML.safe_load(::Regexp.last_match(1), permitted_classes: [Symbol])
+        rendered_path = rendered_frontmatter&.dig('config', 'path')
+        debug_print("Rendered config.path: #{rendered_path.inspect}")
+      rescue StandardError => e
+        debug_print("Could not extract rendered path: #{e.message}")
+      end
+    end
+    
+    rendered
   end
 
   # Renders ERB with time vars, type, title, tags, description, slugify; returns full note content.

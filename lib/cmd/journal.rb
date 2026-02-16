@@ -56,7 +56,7 @@ class JournalCommand
 
   # Prints completion candidates for shell completion.
   def output_completion
-    puts 'today yesterday tomorrow'
+    puts 'today yesterday tomorrow --help -h'
   end
 
   # Prints command-specific usage and options to stdout.

@@ -163,6 +163,6 @@ EOF
   run ./bin/zh unknown
   [ "$status" -eq 1 ]
   [[ "$output" == *"Usage: zh <command> [options]"* ]]
-  [[ "$output" == *"Commands: add, init, reindex, tag, tags, search, find, import, links, backlinks, graph, bookmark, git, history, diff, restore, today, yesterday, tomorrow, journal, completion"* ]]
+  [[ "$output" == *"Commands: add, init, reindex, tag, tags, search, find, import, links, backlinks, resolve, show, graph, bookmark, person, org, theme, git, history, diff, restore, today, yesterday, tomorrow, journal, completion"* ]]
   [[ "$output" == *"Run 'zh --help' for more information."* ]]
 }

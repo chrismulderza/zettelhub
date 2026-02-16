@@ -47,25 +47,51 @@ class TagCommand
       return
     end
 
+    # Check for --source flag
+    source_filter = nil
+    ARGV.each_with_index do |arg, i|
+      if arg == '--source' && ARGV[i + 1]
+        source_filter = ARGV[i + 1].downcase
+      end
+    end
+
     db = SQLite3::Database.new(db_path)
-    results = db.execute(<<-SQL)
-      SELECT TRIM(json_each.value, '"') AS tag, COUNT(*) AS cnt
-      FROM notes, json_each(json_extract(notes.metadata, '$.tags'))
-      WHERE json_extract(notes.metadata, '$.tags') IS NOT NULL
-        AND json_array_length(json_extract(notes.metadata, '$.tags')) > 0
-      GROUP BY tag
-      ORDER BY cnt DESC, tag
-    SQL
+
+    # Build query based on source filter
+    query = if source_filter
+              'SELECT tag, source, COUNT(DISTINCT note_id) AS cnt FROM tags WHERE source = ? GROUP BY tag, source'
+            else
+              'SELECT tag, source, COUNT(DISTINCT note_id) AS cnt FROM tags GROUP BY tag, source'
+            end
+
+    rows = source_filter ? db.execute(query, [source_filter]) : db.execute(query)
     db.close
 
-    if results.empty?
+    # Aggregate by tag, tracking sources
+    tag_data = {}
+    rows.each do |tag, source, cnt|
+      tag_data[tag] ||= { frontmatter: 0, body: 0 }
+      tag_data[tag][source.to_sym] = cnt
+    end
+
+    if tag_data.empty?
       puts 'No tags in notebook.'
       return
     end
 
-    max_count = results.map { |_tag, cnt| cnt.to_s.length }.max
-    results.each do |tag, cnt|
-      puts format("%#{max_count}d  %s", cnt, tag)
+    # Sort by total count descending, then by name
+    sorted = tag_data.sort_by { |tag, data| [-(data[:frontmatter] + data[:body]), tag] }
+
+    # Calculate column widths
+    max_count = sorted.map { |_, data| (data[:frontmatter] + data[:body]).to_s.length }.max
+
+    sorted.each do |tag, data|
+      total = data[:frontmatter] + data[:body]
+      sources = []
+      sources << 'frontmatter' if data[:frontmatter] > 0
+      sources << 'body' if data[:body] > 0
+      source_str = sources.any? ? " [#{sources.join(', ')}]" : ''
+      puts format("%#{max_count}d  %s%s", total, tag, source_str)
     end
   end
 
@@ -217,9 +243,9 @@ class TagCommand
       return
     end
 
-    # Completing first position after "tag" -> subcommands
+    # Completing first position after "tag" -> subcommands and options
     if prev.nil? || prev == 'tag' || (prev && !SUBCOMMANDS.include?(prev))
-      puts SUBCOMMANDS.join(' ')
+      puts "#{SUBCOMMANDS.join(' ')} --source --help -h"
       return
     end
 
@@ -232,11 +258,7 @@ class TagCommand
 
     case prev
     when 'add', 'remove', 'rename'
-      results = db.execute(<<-SQL)
-        SELECT DISTINCT json_each.value FROM notes, json_each(json_extract(notes.metadata, '$.tags'))
-        WHERE json_extract(notes.metadata, '$.tags') IS NOT NULL AND json_array_length(json_extract(notes.metadata, '$.tags')) > 0
-        ORDER BY 1
-      SQL
+      results = db.execute('SELECT DISTINCT tag FROM tags ORDER BY tag')
       puts results.map(&:first).compact.uniq.sort.join(' ')
     when 'list'
       puts ''
@@ -268,11 +290,19 @@ class TagCommand
           rename  Replace OLD_TAG with NEW_TAG in every note that has OLD_TAG
 
       OPTIONS:
-          --help, -h      Show this help message
-          --completion    Output shell completion candidates
+          --help, -h           Show this help message
+          --completion         Output shell completion candidates
+          --source SOURCE      Filter by source: frontmatter or body
+
+      SOURCES:
+          Tags are collected from two sources:
+          - frontmatter: Tags defined in YAML front matter (tags: [...])
+          - body: Hashtags (#tagname) found in note body text
 
       EXAMPLES:
-          zh tags
+          zh tags                        All tags with sources shown
+          zh tags --source frontmatter   Only front matter tags
+          zh tags --source body          Only body hashtags
           zh tag list
           zh tag add work abc12345
           zh tag remove work abc12345

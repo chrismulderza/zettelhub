@@ -1,0 +1,31 @@
+# Gruvbox Theme
+# A retro groove color scheme with warm colors.
+# https://github.com/morhetz/gruvbox
+
+name: gruvbox
+description: Retro groove color scheme with warm tones
+bat_theme: gruvbox-dark
+
+palette:
+  # Background colors (dark mode)
+  bg: "#282828"
+  bg_highlight: "#3C3836"
+  bg_selection: "#504945"
+  
+  # Foreground colors
+  fg: "#EBDBB2"
+  fg_muted: "#928374"
+  
+  # Accent colors
+  accent: "#83A598"           # Aqua - primary accent
+  accent_secondary: "#B8BB26" # Green - secondary accent
+  
+  # Semantic colors
+  success: "#B8BB26"          # Green
+  warning: "#FABD2F"          # Yellow
+  error: "#FB4934"            # Red
+  info: "#83A598"             # Aqua
+  
+  # Highlights
+  match: "#FABD2F"            # Yellow for search matches
+  comment: "#928374"          # Grey for comments

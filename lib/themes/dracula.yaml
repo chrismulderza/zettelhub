@@ -1,0 +1,31 @@
+# Dracula Theme
+# A dark theme with vibrant colors.
+# https://draculatheme.com/
+
+name: dracula
+description: A dark theme with vibrant colors
+bat_theme: Dracula
+
+palette:
+  # Background colors
+  bg: "#282A36"
+  bg_highlight: "#44475A"
+  bg_selection: "#44475A"
+  
+  # Foreground colors
+  fg: "#F8F8F2"
+  fg_muted: "#6272A4"
+  
+  # Accent colors
+  accent: "#BD93F9"           # Purple - primary accent
+  accent_secondary: "#8BE9FD" # Cyan - secondary accent
+  
+  # Semantic colors
+  success: "#50FA7B"          # Green
+  warning: "#F1FA8C"          # Yellow
+  error: "#FF5555"            # Red
+  info: "#8BE9FD"             # Cyan
+  
+  # Highlights
+  match: "#F1FA8C"            # Yellow for search matches
+  comment: "#6272A4"          # Muted purple for comments

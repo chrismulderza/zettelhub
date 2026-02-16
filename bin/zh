@@ -40,6 +40,8 @@ COMMANDS:
     links NOTE_ID       List outgoing links (wikilinks and markdown) from a note
     backlinks NOTE_ID   List notes that link to this note (incoming links)
     graph NOTE_ID       Show link graph (DOT or ASCII) for a note and its neighbourhood
+    resolve NOTE_ID     Return absolute file path for a note (for editor integration)
+    show NOTE_ID        Display note content through a preview template
 
     today               Open or create today's journal entry, then open in editor
     yesterday           Open or create yesterday's journal entry, then open in editor
@@ -50,6 +52,29 @@ COMMANDS:
     bookmark add [URL]  Create a bookmark; optional --title, --tags, --description
     bookmark export     Export bookmarks to Netscape bookmarks.html
     bookmark refresh    Validate URIs, mark unreachable as stale, fill empty descriptions
+
+    person              Interactive contact browser (no args); add/list/import/export with subcommands
+    person add          Create a new contact; prompts for name, email, etc.
+    person list         List all contacts in table format
+    person import FILE  Import contacts from vCard (.vcf) file
+    person export       Export contacts to vCard file
+    person birthdays    Show upcoming birthdays
+    person stale        Show contacts not recently contacted
+
+    org                 Interactive organization browser (no args)
+    org add             Create new organization or account
+    org list            List all organizations/accounts
+    org tree NOTE_ID    Display organization hierarchy tree
+    org parent NOTE_ID  Show parent organization
+    org subs NOTE_ID    List direct subsidiaries
+    org ancestors ID    List all ancestor organizations
+    org descendants ID  List all descendant organizations
+
+    theme               Manage color themes for CLI tools
+    theme list          List available themes
+    theme preview NAME  Preview theme colors in terminal
+    theme export NAME   Export theme as shell environment variables
+    theme apply NAME    Write config files (glow style, etc.)
 
     git init            Initialize git repository in notebook (creates .gitignore)
     git status          Show modified/added/deleted notes with titles
@@ -299,6 +324,18 @@ case $COMMAND in
     fi
     ruby "$DIR/../lib/cmd/backlinks.rb" "$@"
     ;;
+  resolve)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/resolve.rb" "$@"
+    ;;
+  show)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/show.rb" "$@"
+    ;;
   graph)
     if [ "$DEBUG_MODE" -eq 1 ]; then
       export ZH_DEBUG=1
@@ -341,9 +378,27 @@ case $COMMAND in
     fi
     ruby "$DIR/../lib/cmd/restore.rb" "$@"
     ;;
+  person)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/person.rb" "$@"
+    ;;
+  org)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/org.rb" "$@"
+    ;;
+  theme)
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+      export ZH_DEBUG=1
+    fi
+    ruby "$DIR/../lib/cmd/theme.rb" "$@"
+    ;;
   *)
     echo "Usage: zh <command> [options]"
-    echo "Commands: add, init, reindex, tag, tags, search, find, import, links, backlinks, graph, bookmark, git, history, diff, restore, today, yesterday, tomorrow, journal, completion"
+    echo "Commands: add, init, reindex, tag, tags, search, find, import, links, backlinks, resolve, show, graph, bookmark, person, org, theme, git, history, diff, restore, today, yesterday, tomorrow, journal, completion"
     echo "Run 'zh --help' for more information."
     exit 1
     ;;

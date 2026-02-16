@@ -45,6 +45,19 @@ install:
 	ruby -Ilib lib/install_config.rb "$(CURDIR)/examples/config/config.yaml" "$(HOME)/.config/zh/config.yaml" "$$BACKUP_DIR" || exit 1; \
 	cp lib/templates/*.erb $(HOME)/.config/zh/templates/; \
 	echo "Config and templates installed/updated in $(HOME)/.config/zh"
+	@# Install themes
+	@if [ -d "$(CURDIR)/lib/themes" ]; then \
+		mkdir -p $(HOME)/.config/zh/themes; \
+		cp $(CURDIR)/lib/themes/*.yaml $(HOME)/.config/zh/themes/; \
+		echo "Themes installed to $(HOME)/.config/zh/themes"; \
+	fi
+	@# Install Neovim integration if nvim directory exists
+	@if [ -d "$(CURDIR)/nvim" ]; then \
+		mkdir -p $(HOME)/.config/zh/nvim/lua; \
+		cp -r $(CURDIR)/nvim/lua/zettelhub $(HOME)/.config/zh/nvim/lua/; \
+		echo "Neovim integration installed to $(HOME)/.config/zh/nvim"; \
+		echo "Add to your Neovim config: vim.opt.runtimepath:append('~/.config/zh/nvim')"; \
+	fi
 	@echo "Installed ZettelHub to $(INSTALL_DIR)"
 	@echo "Symlink created: $(BIN_DIR)/zh"
 

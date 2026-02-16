@@ -87,8 +87,7 @@ class ReindexCommand
 
   # Prints completion candidates for shell completion (empty for reindex).
   def output_completion
-    # Reindex takes no arguments
-    puts ''
+    puts '--help -h'
   end
 
   # Prints command-specific usage and options to stdout.

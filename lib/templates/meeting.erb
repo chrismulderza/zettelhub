@@ -6,21 +6,56 @@ title: "<%= title %>"
 aliases: "<%= aliases %>"
 tags: <%= tags %>
 description: "<%= description %>"
+attendees: <%= attendees %>
+account: "<%= account %>"
 config:
     path: "meetings/<%= year %>/<%= month %>/<%= id %>-<%= slugify(title) %>.md"
     default_alias: "{type}> {date}: {title}"
     default_tags:
         - meeting
+    prompts:
+        - key: title
+          type: input
+          prompt: "Meeting title"
+          required: true
+        - key: account
+          type: filter
+          prompt: "Related account"
+          optional: true
+          source:
+              type: notes
+              filter_type: account
+              return: wikilink
+        - key: attendees
+          type: filter
+          prompt: "Attendees"
+          optional: true
+          multi: true
+          source:
+              type: notes
+              filter_type: person
+              return: wikilink
 ---
 
 # Meeting: <%= title %>
 
-[<%= date %>](../journal/<%= date %>.md)
-
-## Agenda
+**Date:** [<%= date %>](../journal/<%= date %>.md)
+<% if account && !account.to_s.empty? %>
+**Account:** <%= account %>
+<% end %>
 
 ## Attendees
 
+<% if attendees.is_a?(Array) && attendees.any? %>
+<% attendees.each do |person| %>
+- <%= person %>
+<% end %>
+<% end %>
+
+## Agenda
+
 ## Meeting Notes
+
+## Action Items
 
 ## Next Steps

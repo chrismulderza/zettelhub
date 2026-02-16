@@ -87,7 +87,7 @@ class GraphCommand
     if args.include?('--format') || args.include?('-f')
       puts 'dot ascii'
     else
-      puts ''
+      puts '--format --depth --help -h'
     end
   end
 

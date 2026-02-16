@@ -1,0 +1,19 @@
+# <%= title %>
+
+<% unless type.to_s.empty? %>
+**Type:** <%= type %>
+<% end %>
+<% unless date.to_s.empty? %>
+**Date:** <%= date %>
+<% end %>
+<% if tags.any? %>
+**Tags:** <%= tags.join(', ') %>
+<% end %>
+<% unless description.to_s.empty? %>
+
+<%= description %>
+<% end %>
+
+---
+
+<%= body %>

@@ -13,11 +13,16 @@ require_relative 'utils'
 class Indexer
   include Debug
 
+  # Pattern to match #hashtags in body text (not inside code blocks).
+  # Matches: #tag, #tag-name, #tag_name (1-50 chars, starts with letter).
+  HASHTAG_PATTERN = /(?<![&\w])#([a-zA-Z][a-zA-Z0-9_-]{0,49})(?![a-zA-Z0-9_-])/.freeze
+
   # Sets db path from config, creates parent dir if needed.
   def initialize(config)
     @config = config
     @db_path = Config.index_db_path(@config['notebook_path'])
     @notebook_path = File.expand_path(@config['notebook_path'])
+    @extract_body_hashtags = @config.dig('tags', 'extract_body_hashtags') != false
     FileUtils.mkdir_p(File.dirname(@db_path))
   end
 
@@ -122,6 +127,10 @@ class Indexer
       update_backlinks_section(nid, db)
     end
 
+    # Extract and store all tags (frontmatter + body)
+    frontmatter_tags = note.metadata['tags']
+    extract_and_store_tags(note.id, frontmatter_tags, body, db)
+
     db.close
   end
 
@@ -171,7 +180,7 @@ class Indexer
     db.close
   end
 
-  # Removes notes by id from the index. FTS and links are updated. No-op if ids empty or DB missing.
+  # Removes notes by id from the index. FTS, links, and tags are updated. No-op if ids empty or DB missing.
   def remove_notes(ids)
     return if ids.nil? || ids.empty?
     return unless File.exist?(@db_path)
@@ -180,17 +189,19 @@ class Indexer
     setup_schema(db)
     placeholders = (['?'] * ids.size).join(', ')
     db.execute("DELETE FROM links WHERE source_id IN (#{placeholders}) OR target_id IN (#{placeholders})", ids + ids)
+    db.execute("DELETE FROM tags WHERE note_id IN (#{placeholders})", ids)
     db.execute("DELETE FROM notes WHERE id IN (#{placeholders})", ids)
     db.close
   end
 
   private
 
-  # Creates notes table, links table, FTS index, and triggers if not present.
+  # Creates notes table, links table, FTS index, tags table, and triggers if not present.
   def setup_schema(db)
     setup_notes_table(db)
     setup_links_table(db)
     setup_fts_index(db)
+    setup_tags_table(db)
     setup_triggers(db)
   end
 
@@ -251,6 +262,46 @@ class Indexer
         id UNINDEXED
       )
     SQL
+  end
+
+  # Creates unified tags table for both frontmatter and body tags.
+  # source: 'frontmatter' or 'body'
+  def setup_tags_table(db)
+    # Migrate from old body_tags table if it exists
+    migrate_body_tags_table(db)
+
+    db.execute <<-SQL
+      CREATE TABLE IF NOT EXISTS tags (
+        note_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'frontmatter',
+        PRIMARY KEY (note_id, tag, source)
+      )
+    SQL
+    db.execute('CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_tags_note ON tags(note_id)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_tags_source ON tags(source)')
+  end
+
+  # Migrates data from old body_tags table to unified tags table.
+  def migrate_body_tags_table(db)
+    # Check if body_tags table exists
+    exists = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='body_tags'").any?
+    return unless exists
+
+    # Check if tags table exists; if not, migration will happen after tags table is created
+    tags_exists = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tags'").any?
+    if tags_exists
+      # Migrate data
+      db.execute <<-SQL
+        INSERT OR IGNORE INTO tags (note_id, tag, source)
+        SELECT note_id, tag, 'body' FROM body_tags
+      SQL
+    end
+
+    # Drop old table
+    db.execute('DROP TABLE IF EXISTS body_tags')
+    debug_print('Migrated body_tags to unified tags table')
   end
 
   # Creates INSERT/UPDATE/DELETE triggers to keep notes_fts in sync.
@@ -364,5 +415,71 @@ class Indexer
     return if new_content == content
     File.write(note_path, new_content)
     debug_print("Updated backlinks section: #{note_path} (#{source_ids.size} backlinks)")
+  end
+
+  # Extracts and stores all tags (frontmatter and body) in unified tags table.
+  def extract_and_store_tags(note_id, frontmatter_tags, body, db)
+    # Delete existing tags for this note
+    db.execute('DELETE FROM tags WHERE note_id = ?', [note_id])
+
+    # Store frontmatter tags
+    fm_tags = normalize_tag_array(frontmatter_tags)
+    fm_tags.each do |tag|
+      db.execute('INSERT OR IGNORE INTO tags (note_id, tag, source) VALUES (?, ?, ?)', [note_id, tag, 'frontmatter'])
+    end
+
+    # Extract and store body hashtags if enabled
+    body_tags = []
+    if @extract_body_hashtags
+      body_tags = extract_body_hashtags(body)
+      body_tags.each do |tag|
+        db.execute('INSERT OR IGNORE INTO tags (note_id, tag, source) VALUES (?, ?, ?)', [note_id, tag, 'body'])
+      end
+    end
+
+    debug_print("Stored #{fm_tags.size} frontmatter tag(s), #{body_tags.size} body hashtag(s)")
+  end
+
+  # Normalizes tag array: converts to strings, optionally lowercases, removes empty.
+  def normalize_tag_array(tags)
+    return [] if tags.nil?
+
+    tags = Array(tags).map(&:to_s).reject(&:empty?)
+    normalize = @config.dig('tags', 'normalize') != false
+    tags = tags.map(&:downcase) if normalize
+    tags.uniq
+  end
+
+  # Extracts hashtags from body text, excluding code blocks.
+  # Returns array of lowercase tag names (without #).
+  def extract_body_hashtags(body)
+    return [] if body.to_s.empty?
+
+    # Remove code blocks (fenced and inline)
+    body_without_code = body.gsub(/```[\s\S]*?```/m, '')
+                            .gsub(/`[^`]+`/, '')
+    
+    # Extract hashtags
+    hashtags = body_without_code.scan(HASHTAG_PATTERN).flatten
+    
+    # Normalize: lowercase and unique
+    normalize_tags = @config.dig('tags', 'normalize') != false
+    if normalize_tags
+      hashtags = hashtags.map(&:downcase)
+    end
+    
+    # Apply exclusion patterns
+    excluded_patterns = @config.dig('tags', 'excluded_patterns') || []
+    excluded_patterns.each do |pattern|
+      regex = Regexp.new(pattern)
+      hashtags = hashtags.reject { |tag| tag.match?(regex) }
+    end
+    
+    # Apply min/max length
+    min_length = @config.dig('tags', 'min_length') || 2
+    max_length = @config.dig('tags', 'max_length') || 50
+    hashtags = hashtags.select { |tag| tag.length >= min_length && tag.length <= max_length }
+    
+    hashtags.uniq
   end
 end

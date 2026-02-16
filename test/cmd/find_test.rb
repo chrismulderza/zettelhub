@@ -60,12 +60,12 @@ class FindCommandTest < Minitest::Test
     assert_match(/USAGE/, out)
   end
 
-  def test_completion_returns_empty
+  def test_completion_returns_options
     cmd = FindCommand.new
     out, _err = capture_io do
       cmd.run('--completion')
     end
-    assert_equal '', out.strip
+    assert_equal '--help -h', out.strip
   end
 
   def test_exits_when_notebook_path_not_found

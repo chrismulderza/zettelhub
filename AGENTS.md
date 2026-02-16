@@ -140,6 +140,75 @@ Templates are **discovered** by enumerating `.erb` files; they are not listed in
 
 See [README.md](README.md#template-files) and [ARCHITECTURE.md](ARCHITECTURE.md) for more details on template structure and requirements.
 
+## Known Bug Patterns to Avoid
+
+### ERB Variable Shadowing in Template Rendering
+
+**CRITICAL**: When rendering ERB templates with `context.instance_eval { binding }`, method parameters in the enclosing scope will shadow context methods of the same name.
+
+**Problem**: If a method has parameters like `title: nil, tags: nil`, and you render ERB with:
+```ruby
+def render_template(..., title: nil, tags: nil, ...)
+  context = OpenStruct.new(vars)  # vars['title'] = "My Title"
+  template.result(context.instance_eval { binding })  # ERB sees title = nil!
+end
+```
+The `title` parameter (which is `nil` when not provided via CLI) shadows `context.title` in the ERB binding. ERB evaluates `<%= title %>` as the local variable `nil` instead of calling `context.title`.
+
+**Solution**: Extract ERB rendering to a separate helper method that has no local variables matching template variable names:
+```ruby
+def render_template(..., title: nil, ...)
+  # ... build vars ...
+  render_erb_with_context(template_file, vars, config)  # Separate method!
+end
+
+def render_erb_with_context(template_file, vars, config)
+  template = ERB.new(File.read(template_file))
+  context = OpenStruct.new(vars)
+  # No 'title', 'tags', etc. local variables here!
+  template.result(context.instance_eval { binding })
+end
+```
+
+### Wikilink Resolution with Display Text
+
+**Problem**: Wikilinks like `[[9fb61e1a|Clientele Ltd]]` contain both an ID and display text separated by `|`. When resolving wikilinks, the full inner content must be parsed to extract just the target (ID/title) portion.
+
+**Wrong**:
+```ruby
+def resolve_wikilink_to_id(link_text, db)
+  inner = link_text.strip  # "9fb61e1a|Clientele Ltd"
+  if inner =~ /\A[a-f0-9]{8}\z/i  # Never matches!
+    # ...
+  end
+end
+```
+
+**Correct**:
+```ruby
+def resolve_wikilink_to_id(link_text, db)
+  inner = link_text.strip
+  # Parse out the target before the | delimiter
+  target = inner.include?('|') ? inner.split('|', 2).first.strip : inner
+  if target =~ /\A[a-f0-9]{8}\z/i  # Now matches "9fb61e1a"
+    # ...
+  end
+end
+```
+
+### Gum Prompt Visibility
+
+**Problem**: Using only `--placeholder` for `gum input` shows greyed-out text inside the input field, which users may not notice.
+
+**Better**: Use `--header` to show the prompt label above the input field:
+```ruby
+# Instead of:
+cmd = ['gum', 'input', '--placeholder', 'Meeting title']
+
+# Use:
+cmd = ['gum', 'input', '--header', 'Meeting title', '--placeholder', 'Type here...']
+```
+
 ## Architecture Documentation
 
 - **Main documentation**: [ARCHITECTURE.md](ARCHITECTURE.md) - Comprehensive architecture guide

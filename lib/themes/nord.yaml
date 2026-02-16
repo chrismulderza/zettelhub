@@ -1,0 +1,31 @@
+# Nord Theme
+# A cold, bluish color palette inspired by the arctic north.
+# https://www.nordtheme.com/
+
+name: nord
+description: An arctic, north-bluish color palette
+bat_theme: Nord
+
+palette:
+  # Polar Night - dark backgrounds
+  bg: "#2E3440"
+  bg_highlight: "#3B4252"
+  bg_selection: "#434C5E"
+  
+  # Snow Storm - light text
+  fg: "#D8DEE9"
+  fg_muted: "#4C566A"
+  
+  # Frost - accent colors
+  accent: "#88C0D0"           # Cyan - primary accent
+  accent_secondary: "#81A1C1" # Blue - secondary accent
+  
+  # Aurora - semantic colors
+  success: "#A3BE8C"          # Green
+  warning: "#EBCB8B"          # Yellow
+  error: "#BF616A"            # Red
+  info: "#5E81AC"             # Dark blue
+  
+  # Highlights
+  match: "#EBCB8B"            # Yellow for search matches
+  comment: "#616E88"          # Muted for comments

@@ -1,0 +1,32 @@
+# <%= full_name %>
+
+<% unless role.to_s.empty? || organization.to_s.empty? %>
+**<%= role %>** @ <%= organization %>
+<% else %>
+<% unless role.to_s.empty? %>
+**<%= role %>**
+<% end %>
+<% unless organization.to_s.empty? %>
+@ <%= organization %>
+<% end %>
+<% end %>
+
+<% if emails.any? %>
+**Email:** <%= emails.join(', ') %>
+<% end %>
+<% if phones.any? %>
+**Phone:** <%= phones.join(', ') %>
+<% end %>
+<% unless birthday.to_s.empty? %>
+**Birthday:** <%= birthday %>
+<% end %>
+<% unless website.to_s.empty? %>
+**Website:** <%= website %>
+<% end %>
+<% if tags.any? %>
+**Tags:** <%= tags.join(', ') %>
+<% end %>
+
+---
+
+<%= body.to_s.lines.first(15).join %>

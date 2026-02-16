@@ -255,7 +255,7 @@ class GitCommand
 
   # Outputs completion candidates for shell completion.
   def output_completion
-    puts 'init status commit sync'
+    puts 'init status commit sync --help -h'
   end
 
   # Outputs main help text.

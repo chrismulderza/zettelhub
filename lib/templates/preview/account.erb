@@ -1,0 +1,23 @@
+# <%= name %>
+
+**[ACCOUNT]**
+<% unless industry.to_s.empty? %>
+**Industry:** <%= industry %>
+<% end %>
+<% unless parent.to_s.empty? %>
+**Parent:** <%= parent %>
+<% end %>
+<% unless website.to_s.empty? %>
+**Website:** <%= website %>
+<% end %>
+<% crm = meta['crm'] || {} %>
+<% unless crm.empty? %>
+**CRM:** <%= crm['segment'] %> / <%= crm['territory'] %>
+<% end %>
+<% if tags.any? %>
+**Tags:** <%= tags.join(', ') %>
+<% end %>
+
+---
+
+<%= body.to_s.lines.first(15).join %>

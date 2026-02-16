@@ -3,11 +3,13 @@
 
 require 'sqlite3'
 require 'set'
+require 'json'
 require_relative '../config'
 require_relative '../utils'
 require_relative '../debug'
 
 # Backlinks command: list notes that link to a given note (incoming links).
+# Supports multiple output formats for editor integration.
 class BacklinksCommand
   include Debug
 
@@ -15,6 +17,15 @@ class BacklinksCommand
   def run(*args)
     return output_completion(args) if args.first == '--completion'
     return output_help if args.first == '--help' || args.first == '-h'
+
+    # Parse options
+    json_output = args.delete('--json')
+    format_idx = args.index('--format')
+    output_format = 'default'
+    if format_idx
+      args.delete_at(format_idx)
+      output_format = args.delete_at(format_idx) || 'default'
+    end
 
     note_arg = args.find { |a| !a.to_s.start_with?('-') }
     if note_arg.to_s.strip.empty?
@@ -24,7 +35,8 @@ class BacklinksCommand
     end
 
     config = Config.load_with_notebook(debug: debug?)
-    db_path = Config.index_db_path(config['notebook_path'])
+    notebook_path = config['notebook_path']
+    db_path = Config.index_db_path(notebook_path)
     unless File.exist?(db_path)
       $stderr.puts 'No index found. Run zh reindex first.'
       exit 1
@@ -40,29 +52,61 @@ class BacklinksCommand
     end
 
     db = SQLite3::Database.new(db_path)
-    rows = db.execute('SELECT source_id, link_type FROM links WHERE target_id = ? ORDER BY link_type, source_id', [note_id])
+    rows = db.execute(
+      'SELECT l.source_id, l.link_type, n.path, n.title FROM links l ' \
+      'LEFT JOIN notes n ON l.source_id = n.id ' \
+      'WHERE l.target_id = ? ORDER BY l.link_type, n.title',
+      [note_id]
+    )
     db.close
 
     if rows.empty?
-      puts "No backlinks to note #{note_id}."
+      if json_output
+        puts '[]'
+      else
+        puts "No backlinks to note #{note_id}."
+      end
       return
     end
 
-    db = SQLite3::Database.new(db_path)
-    ids_in_notes = db.execute('SELECT id FROM notes').flatten.to_set
-    db.close
+    # Build result data
+    results = rows.map do |source_id, link_type, path, title|
+      {
+        'id' => source_id,
+        'path' => path,
+        'absolute_path' => path ? File.join(notebook_path, path) : nil,
+        'title' => title || source_id,
+        'link_type' => link_type,
+        'broken' => path.nil?
+      }
+    end
 
-    rows.each do |source_id, link_type|
-      broken = ids_in_notes.include?(source_id) ? '' : ' (broken)'
-      puts "#{source_id}  #{link_type}#{broken}"
+    # Output based on format
+    if json_output
+      puts JSON.generate(results)
+    elsif output_format == 'path'
+      results.each do |r|
+        puts r['absolute_path'] if r['absolute_path']
+      end
+    elsif output_format == 'full'
+      results.each do |r|
+        broken = r['broken'] ? ' (broken)' : ''
+        puts "#{r['id']}\t#{r['path']}\t#{r['title']}\t#{r['link_type']}#{broken}"
+      end
+    else
+      # Default format
+      results.each do |r|
+        broken = r['broken'] ? ' (broken)' : ''
+        puts "#{r['id']}  #{r['link_type']}#{broken}"
+      end
     end
   end
 
   private
 
   # Prints completion candidates for shell completion.
-  def output_completion(args)
-    puts ''
+  def output_completion(_args)
+    puts '--json --format --help -h'
   end
 
   # Prints command-specific usage and options to stdout.
@@ -71,7 +115,7 @@ class BacklinksCommand
       List backlinks (notes that link to this note)
 
       USAGE:
-          zh backlinks NOTE_ID
+          zh backlinks NOTE_ID [OPTIONS]
 
       DESCRIPTION:
           Shows all notes that link to the given note (incoming links).
@@ -79,12 +123,19 @@ class BacklinksCommand
           Marks broken links when the source note is missing from the index.
 
       OPTIONS:
+          --json         Output as JSON array
+          --format FMT   Output format: default, path, full
+                         - default: id and link_type
+                         - path: absolute file paths only
+                         - full: tab-separated id, path, title, link_type
           --help, -h     Show this help message
           --completion   Output shell completion candidates
 
       EXAMPLES:
           zh backlinks abc12345
-          zh backlinks "My Note Title"
+          zh backlinks abc12345 --json
+          zh backlinks abc12345 --format path
+          zh backlinks "My Note Title" --format full
     HELP
   end
 end

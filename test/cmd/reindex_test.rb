@@ -399,7 +399,7 @@ class ReindexCommandTest < Minitest::Test
   def test_reindex_completion_output
     cmd = ReindexCommand.new
     output = capture_io { cmd.run('--completion') }.first
-    assert_equal '', output.strip, 'Completion should return empty string'
+    assert_equal '--help -h', output.strip, 'Completion should return options'
   end
 
   def test_reindex_help_output

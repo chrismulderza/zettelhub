@@ -1,6 +1,7 @@
 ---
 id: "<%= id %>"
 type: bookmark
+date: "<%= date %>"
 uri: "<%= uri %>"
 title: "<%= title %>"
 aliases: "<%= aliases %>"
@@ -10,6 +11,19 @@ config:
   path: "resources/bookmarks/<%= slugify(title) %>-<%= id %>.md"
   default_alias: "{type}> {title}"
   default_tags: [resource, bookmark]
+  prompts:
+    - key: uri
+      type: input
+      prompt: "URL"
+      required: true
+    - key: title
+      type: input
+      prompt: "Title/Description"
+      required: true
+    - key: description
+      type: input
+      prompt: "Notes"
+      optional: true
 ---
 
 # <%= title %>

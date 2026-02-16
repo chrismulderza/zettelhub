@@ -121,3 +121,27 @@ find:
 
 # Templates are discovered from .zh/templates (notebook) and ~/.config/zh/templates (global).
 # Type and output path come from each template's front matter (type, config.path).
+
+# Theme: unified color scheme for CLI tools (gum, fzf, bat, glow, ripgrep).
+# Use a preset name or define a custom palette.
+# Presets: nord, dracula, tokyo-night, gruvbox, catppuccin
+theme: nord
+
+# Or for full customization:
+# theme:
+#   name: custom
+#   description: My custom theme
+#   palette:
+#     bg: "#282a36"
+#     bg_highlight: "#44475a"
+#     bg_selection: "#44475a"
+#     fg: "#f8f8f2"
+#     fg_muted: "#6272a4"
+#     accent: "#bd93f9"
+#     accent_secondary: "#8be9fd"
+#     success: "#50fa7b"
+#     warning: "#f1fa8c"
+#     error: "#ff5555"
+#     info: "#8be9fd"
+#     match: "#f1fa8c"
+#     comment: "#6272a4"

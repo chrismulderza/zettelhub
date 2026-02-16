@@ -1,0 +1,31 @@
+# Catppuccin Mocha Theme
+# A soothing pastel theme with warm colors.
+# https://github.com/catppuccin/catppuccin
+
+name: catppuccin
+description: Soothing pastel theme (Mocha variant)
+bat_theme: base16
+
+palette:
+  # Background colors (Mocha)
+  bg: "#1E1E2E"
+  bg_highlight: "#313244"
+  bg_selection: "#45475A"
+  
+  # Foreground colors
+  fg: "#CDD6F4"
+  fg_muted: "#6C7086"
+  
+  # Accent colors
+  accent: "#89B4FA"           # Blue - primary accent
+  accent_secondary: "#CBA6F7" # Mauve - secondary accent
+  
+  # Semantic colors
+  success: "#A6E3A1"          # Green
+  warning: "#F9E2AF"          # Yellow
+  error: "#F38BA8"            # Red
+  info: "#89DCEB"             # Sky
+  
+  # Highlights
+  match: "#F9E2AF"            # Yellow for search matches
+  comment: "#6C7086"          # Overlay0 for comments

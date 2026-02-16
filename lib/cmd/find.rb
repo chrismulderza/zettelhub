@@ -124,7 +124,7 @@ class FindCommand
 
   # Prints completion candidates for shell completion (empty for find).
   def output_completion
-    puts ''
+    puts '--help -h'
   end
 
   # Prints command-specific usage and options to stdout.

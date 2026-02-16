@@ -386,12 +386,8 @@ class ImportCommand
   end
 
   # Prints completion candidates for shell completion.
-  def output_completion(args)
-    if args[1] == '--options' || (args.length <= 2 && args[1].to_s.start_with?('--'))
-      puts '--into --target-dir --recursive --dry-run --help -h'
-      return
-    end
-    puts ''
+  def output_completion(_args)
+    puts '--into --target-dir --recursive --dry-run --help -h'
   end
 
   # Prints command-specific usage and options to stdout.

@@ -1,0 +1,90 @@
+---
+id: "<%= id %>"
+type: person
+date: "<%= date %>"
+title: "<%= full_name %>"
+full_name: "<%= full_name %>"
+aliases: ["person> <%= full_name %>", "@<%= full_name %>"]
+tags: <%= tags %>
+emails: <%= emails %>
+phones: <%= phones %>
+organization: "<%= organization %>"
+role: "<%= role %>"
+birthday: "<%= birthday %>"
+address: "<%= address %>"
+website: "<%= website %>"
+social:
+  linkedin: "<%= linkedin %>"
+  github: "<%= github %>"
+  twitter: "<%= twitter %>"
+relationships: <%= relationships %>
+last_contact: "<%= last_contact %>"
+config:
+  path: "people/<%= slugify(full_name) %>-<%= id %>.md"
+  default_tags: [contact, person]
+  prompts:
+    - key: full_name
+      type: input
+      prompt: "Full name"
+      required: true
+    - key: emails
+      type: input
+      prompt: "Email address(es), comma-separated"
+      optional: true
+      transform:
+        - { split: "," }
+    - key: phones
+      type: input
+      prompt: "Phone number(s), comma-separated"
+      optional: true
+      transform:
+        - { split: "," }
+    - key: organization
+      type: filter
+      prompt: "Organization"
+      optional: true
+      source:
+        type: notes
+        filter_type: "organization|account"
+        return: wikilink
+    - key: role
+      type: input
+      prompt: "Role/Title"
+      optional: true
+    - key: birthday
+      type: input
+      prompt: "Birthday (YYYY-MM-DD)"
+      optional: true
+    - key: website
+      type: input
+      prompt: "Website URL"
+      optional: true
+---
+
+# <%= full_name %>
+
+## Contact Information
+<% email_list = emails.is_a?(Array) ? emails : [emails].compact.reject(&:empty?) rescue [] %>
+<% phone_list = phones.is_a?(Array) ? phones : [phones].compact.reject(&:empty?) rescue [] %>
+<% if email_list.any? %>
+**Email**: <% email_list.each do |email| %>[<%= email %>](mailto:<%= email %>) <% end %>
+<% end %>
+<% if phone_list.any? %>
+**Phone**: <% phone_list.each do |phone| %>[<%= phone %>](tel:<%= phone.to_s.gsub(/\s/, '') %>) <% end %>
+<% end %>
+<% unless organization.to_s.empty? %>
+**Organization**: <%= organization %>
+<% end %>
+<% unless role.to_s.empty? %>
+**Role**: <%= role %>
+<% end %>
+<% unless birthday.to_s.empty? %>
+**Birthday**: <%= birthday %>
+<% end %>
+<% unless website.to_s.empty? %>
+**Website**: [<%= website %>](<%= website %>)
+<% end %>
+
+## Notes
+
+<%= content %>

@@ -552,7 +552,7 @@ class BookmarkCommand
 
   # Prints completion candidates (add, export, refresh) for shell completion.
   def output_completion
-    puts 'add export refresh'
+    puts 'add export refresh --help -h'
   end
 
   # Prints command-specific usage and options to stdout.

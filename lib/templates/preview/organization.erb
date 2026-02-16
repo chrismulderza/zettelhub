@@ -1,0 +1,22 @@
+# <%= name %>
+
+**[<%= type.to_s.upcase %>]**
+<% unless industry.to_s.empty? %>
+**Industry:** <%= industry %>
+<% end %>
+<% unless parent.to_s.empty? %>
+**Parent:** <%= parent %>
+<% end %>
+<% unless website.to_s.empty? %>
+**Website:** <%= website %>
+<% end %>
+<% if subsidiaries.any? %>
+**Subsidiaries:** <%= subsidiaries.length %>
+<% end %>
+<% if tags.any? %>
+**Tags:** <%= tags.join(', ') %>
+<% end %>
+
+---
+
+<%= body.to_s.lines.first(15).join %>

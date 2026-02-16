@@ -465,7 +465,8 @@ class AddCommandTest < Minitest::Test
 
       cmd = AddCommand.new
       output = capture_io { cmd.run('--completion') }.first
-      assert_equal 'bookmark journal meeting note', output.strip
+      # Includes all bundled templates and options
+      assert_equal 'bookmark journal meeting note organization person --title --tags --description --help -h', output.strip
     end
   end
 
@@ -477,7 +478,8 @@ class AddCommandTest < Minitest::Test
 
       cmd = AddCommand.new
       output = capture_io { cmd.run('--completion') }.first
-      assert_equal 'bookmark journal meeting note', output.strip
+      # Includes all bundled templates and options
+      assert_equal 'bookmark journal meeting note organization person --title --tags --description --help -h', output.strip
     end
   end
 
@@ -489,7 +491,7 @@ class AddCommandTest < Minitest::Test
     begin
       cmd = AddCommand.new
       output = capture_io { cmd.run('--completion') }.first
-      assert_equal 'note journal meeting bookmark', output.strip
+      assert_equal 'note journal meeting bookmark --title --tags --description --help -h', output.strip
     ensure
       # Restore original method
       Config.define_singleton_method(:load, original_load)

@@ -10,6 +10,10 @@ M.config = {
   person_alias_prefix = '@',
   tag_prefix = '#',
   tag_completion_in_body = true,
+  autoindex = true,           -- Enable auto-indexing on save
+  autoindex_notify = true,    -- Show notification after indexing
+  conceal_wikilinks = false,  -- Conceal wikilink syntax (show only title)
+  conceal_icon = '🔗',        -- Icon for [[id]] links without title
 }
 
 -- Parse JSON from zh search output

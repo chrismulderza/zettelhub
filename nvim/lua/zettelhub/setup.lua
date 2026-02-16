@@ -155,6 +155,32 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('ZkPreview', function()
     require('zettelhub.preview').hover()
   end, { desc = 'ZettelHub: Preview wikilink under cursor' })
+
+  -- --------------------------------------------------------------------------
+  -- Auto-indexing on save
+  -- --------------------------------------------------------------------------
+  -- Automatically reindex notes when saved (only for files in notebook)
+  if zettelhub.config.autoindex then
+    require('zettelhub.autoindex').setup()
+  end
+
+  -- --------------------------------------------------------------------------
+  -- Wikilink concealment
+  -- --------------------------------------------------------------------------
+  -- Hide wikilink syntax, showing only the display text
+  if zettelhub.config.conceal_wikilinks then
+    require('zettelhub.conceal').setup({
+      enabled = true,
+      link_icon = zettelhub.config.conceal_icon or '🔗',
+    })
+  end
+
+  -- --------------------------------------------------------------------------
+  -- User Commands for conceal
+  -- --------------------------------------------------------------------------
+  vim.api.nvim_create_user_command('ZkConcealToggle', function()
+    require('zettelhub.conceal').toggle()
+  end, { desc = 'ZettelHub: Toggle wikilink concealment' })
 end
 
 return M

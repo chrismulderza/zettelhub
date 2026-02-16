@@ -6,33 +6,41 @@ This document outlines proposed features and enhancements to transform ZettelHub
 
 ### Implemented
 - ✅ Note creation with ERB templates
-- ✅ Multiple note types (note, journal, meeting)
+- ✅ Multiple note types (note, journal, meeting, person, organization, account, bookmark)
 - ✅ SQLite indexing with FTS5 full-text search infrastructure
 - ✅ YAML front matter with metadata
-- ✅ Template system with variable interpolation
-- ✅ Configuration system (global + local)
-- ✅ Shell completion
+- ✅ Template system with variable interpolation and **dynamic prompts**
+- ✅ Configuration system (global + local + notebook-level)
+- ✅ Shell completion for all commands
 - ✅ ID generation (8-character hex)
-- ✅ Tag support in metadata
+- ✅ Tag support (front matter and body hashtags unified in `tags` table)
 - ✅ Alias generation for searchability
-- ✅ Reindex command (`zh reindex`) - Recursively scans notebook directory and rebuilds SQLite index
-- ✅ Search command (`zh search`) – FTS5 full-text search, filters (type, tag, date, path), interactive by default (fzf), --list/--table/--json for stdout.
-- ✅ Find command (`zh find`) – Interactive find in note content (ripgrep + fzf).
-- ✅ Journal commands (`zh today`, `zh yesterday`, `zh tomorrow`, `zh journal [DATE]`) – Open or create that day's journal file and open in editor; config: `journal.path_pattern`, `tools.editor.journal`; `zh journal` with no args = today.
-- ✅ Default tags from templates – Templates can define `config.default_tags` in YAML front matter; merged with user-supplied tags when creating notes (note, journal, meeting templates).
-- ✅ Tag commands (`zh tag list|add|remove|rename`, `zh tags`) – List tags with counts; add/remove tag on a note by ID; rename tag across all notes.
-- ✅ Import command (`zh import`) – Bulk import markdown notes with new IDs, wikilink/markdown link resolution, `--into DIR`, `--recursive`, `--dry-run`; type-aware when templates exist.
-- ✅ Link tracking and backlinks – Indexer extracts wikilinks and markdown links; `links` table; backlinks section in note files; `zh links NOTE_ID` (outgoing), `zh backlinks NOTE_ID` (incoming).
-- ✅ Graph command (`zh graph NOTE_ID`) – Link graph for a note and its neighbourhood (DOT or ASCII format).
-- ✅ Bookmark type and command – Resource/Bookmark model; `zh bookmark` (interactive browser), `zh bookmark add [URL]`, `zh bookmark export`, `zh bookmark refresh` (stale detection, meta description fetch).
+- ✅ Reindex command (`zh reindex`) – Full reindex or single-file with `--file`
+- ✅ Search command (`zh search`) – FTS5 full-text search, filters, interactive/stdout modes
+- ✅ Find command (`zh find`) – Interactive find in note content (ripgrep + fzf)
+- ✅ Journal commands (`zh today`, `zh yesterday`, `zh tomorrow`, `zh journal [DATE]`)
+- ✅ Tag commands (`zh tag list|add|remove|rename`, `zh tags`) with source filtering
+- ✅ Import command (`zh import`) – Bulk import with ID assignment, link resolution
+- ✅ Link tracking and backlinks – Indexer extracts wikilinks and markdown links; `zh links`, `zh backlinks`
+- ✅ Graph command (`zh graph NOTE_ID`) – Link graph (DOT or ASCII)
+- ✅ Show command (`zh show NOTE_ID`) – Display formatted note with template support
+- ✅ Resolve command (`zh resolve`) – Resolve IDs/aliases to paths
+- ✅ Bookmark type and commands (`zh bookmark` browser, add, export, refresh)
+- ✅ Person/contact management (`zh person` browser, add, list, import, export, merge, birthdays, stale)
+- ✅ Organization management (`zh org` browser, add, list, tree, parent, subs, ancestors, descendants)
+- ✅ Theming system (`zh theme list|preview|export|apply`) – Nord, Dracula, Tokyo Night, Gruvbox, Catppuccin
+- ✅ Git integration (`zh git init|status|commit|sync`, `zh history`, `zh diff`, `zh restore`)
+- ✅ **Neovim integration** – nvim-cmp completion, Telescope pickers, link navigation (`gf`/`gF`), hover preview (`K`), auto-indexing on save
+- ✅ **Dynamic prompts** – Multi-select, optional fields, dynamic sources, validation, transformations
 
 ### Not Yet Implemented
-- List command (`zh list`) – list all notes in table/list/JSON (search/find provide interactive discovery)
-- General browse command (`zh browse`) for all notes (bookmark has its own interactive browser)
-- Edit, update, delete, read commands (find/search open in editor; no dedicated read/update/delete)
-- Link following (`zh follow`) – interactive follow from a note
-- Stats, orphans, general export (HTML/PDF/JSON); bookmark export to Netscape bookmarks.html is implemented
-- Neovim/tmux integration, advanced query language
+- List command (`zh list`) – list all notes in table/list/JSON (search/find provide discovery)
+- General browse command (`zh browse`) for all notes
+- Edit, update, delete commands (find/search open in editor; no dedicated update/delete)
+- Link following CLI (`zh follow`) – interactive follow from a note
+- Stats (`zh stats`), orphans (`zh orphans`)
+- General export (HTML/PDF/JSON) – bookmark export to Netscape bookmarks.html is implemented
+- Advanced query language, tmux integration
 
 ## High Priority Features
 
@@ -219,32 +227,36 @@ This document outlines proposed features and enhancements to transform ZettelHub
 
 ### Editor Integration
 
-#### 17. Neovim Plugin Support
-- **LSP integration**: Language Server Protocol for ZettelHub
-- **Commands in Neovim**:
-  - `:ZkNew` - Create new note
-  - `:ZkSearch` - Search notes (opens fzf in Neovim)
-  - `:ZkLink` - Insert link to note
-  - `:ZkBacklinks` - Show backlinks in current note
-  - `:ZkFollow` - Follow link under cursor
-- **Fuzzy finder integration**: Telescope.nvim, fzf.vim support
-- **Link following**: `gf` to follow `[[links]]`
-- **Auto-completion**: Note ID and title completion
-- **Syntax highlighting**: Markdown with ZettelHub link syntax
+#### 17. Neovim Plugin Support ✅ IMPLEMENTED
+- ✅ **nvim-cmp completion**: Inline completion for `[[wikilinks]]`, `[[@person]]`, `#tags`
+- ✅ **Telescope pickers**: Browse notes, insert links, select people/organizations/tags
+- ✅ **Commands in Neovim**: `:ZkBrowse`, `:ZkLink`, `:ZkPerson`, `:ZkOrg`, `:ZkTag`, `:ZkBacklinks`, `:ZkForwardLinks`, `:ZkPreview`, `:ZkFollow`, `:ZkFollowOrCreate`
+- ✅ **Link following**: `gf` follows wikilinks and markdown links under cursor
+- ✅ **Create on missing**: `gF` offers to create notes for unresolved links
+- ✅ **Hover preview**: `K` shows note preview in floating window
+- ✅ **Auto-indexing**: Notes automatically reindexed on save (BufWritePost)
+- ✅ **Coexistence**: Works alongside Marksman LSP without conflicts
+- **Future**: LSP server for ZettelHub, visual selection to note
 
-#### 18. Neovim-Specific Features
-- **Quick note creation**: `:ZkQuickNote` - Create note from visual selection
-- **Link insertion**: `:ZkLinkInsert` - Interactive link creation with fzf
-- **Daily note**: `:ZkToday` - Open today's journal
-- **Note navigation**: `:ZkBrowse` - Browse notes in Neovim
-- **Preview**: `:ZkPreview` - Preview note in split window with glow/bat
-- **Backlink display**: Show backlinks in location list or quickfix
+#### 18. Neovim-Specific Features ✅ PARTIALLY IMPLEMENTED
+- ✅ **Link insertion**: Telescope pickers for wikilink/person/org/tag insertion
+- ✅ **Note navigation**: `:ZkBrowse` and `<leader>zf` browse notes
+- ✅ **Preview**: `K` hover preview, `:ZkPreview` command
+- ✅ **Backlink display**: `:ZkBacklinks` and `<leader>zb` Telescope picker
+- ✅ **Forward links**: `:ZkForwardLinks` and `<leader>zL` Telescope picker
+- **Future**: `:ZkQuickNote` from visual selection, quickfix integration
 
 ### Link Syntax Support
 
-#### 19. Markdown Link Extensions
-- ✅ **Implemented**: Wikilink `[[id]]` / `[[title]]` and markdown links; resolution to note IDs; link extraction and storage in indexer; backlinks section in notes.
-- **Future**: Link display as title in rendered markdown; broken-link highlighting in editor; auto-create note on link target missing.
+#### 19. Markdown Link Extensions ✅ IMPLEMENTED
+- ✅ **Wikilinks**: `[[id]]`, `[[id|title]]`, `[[@Name]]` (person alias)
+- ✅ **Markdown links**: `[text](path.md)`, `[text](../relative/path.md)`
+- ✅ **Link resolution**: Both wikilinks and markdown links resolve to note IDs
+- ✅ **Link extraction**: Indexer extracts and stores all links; `links` table in SQLite
+- ✅ **Backlinks section**: Auto-generated backlinks section in notes with file-relative paths
+- ✅ **Neovim navigation**: `gf` follows both wikilinks and markdown links
+- ✅ **Create on missing**: `gF` offers to create notes for unresolved links
+- **Future**: Broken-link highlighting in editor, link display as title in preview
 
 ## Advanced Features
 
@@ -279,9 +291,18 @@ This document outlines proposed features and enhancements to transform ZettelHub
 
 ### Workflow Enhancements
 
-#### 24. Templates Enhancement
-- ✅ **Template variables**: Built-in variables already include date, year, month, week, week_year, month_name, month_name_short, day_name, day_name_short, time, timestamp, id, etc.
-- **Future**: Template inheritance (base + overrides), reusable snippets, fzf-based template picker.
+#### 24. Templates Enhancement ✅ IMPLEMENTED
+- ✅ **Template variables**: Built-in variables (date, year, month, week, id, etc.) and custom variables with dependency resolution
+- ✅ **Dynamic prompts**: Interactive prompts defined in template `config.prompts`
+- ✅ **Prompt types**: `input`, `write`, `choose`, `filter`, `confirm`
+- ✅ **Multi-select**: `multi: true` for selecting multiple items (e.g., attendees)
+- ✅ **Optional fields**: `optional: true` prompts for confirmation before collecting
+- ✅ **Dynamic sources**: Populate options from `tags`, `notes`, `files`, `command`
+- ✅ **Conditional prompts**: `when` expressions to show prompts conditionally
+- ✅ **Value transformations**: `split`, `join`, `slugify`, `trim`, `lowercase`, etc.
+- ✅ **Value validation**: Built-in validators (url, email, date, id, slug) and custom regex
+- ✅ **Default values**: ERB-interpolated defaults with variable references
+- **Future**: Template inheritance, reusable snippets, fzf-based template picker
 
 #### 25. Note Types Enhancement
 - ✅ **Resource/Bookmark**: Implemented – bookmark type, `zh bookmark` (browser, add, export, refresh).
@@ -358,38 +379,47 @@ This document outlines proposed features and enhancements to transform ZettelHub
 
 ## Implementation Priority
 
-### Phase 1: Core Functionality (High Priority)
+### Phase 1: Core Functionality ✅ COMPLETE
 1. ✅ Search command with fzf integration
-2. List/browse commands (not yet; search/find provide discovery)
-3. Edit command (not yet)
-4. ✅ Link tracking, backlinks, and graph (`zh links`, `zh backlinks`, `zh graph`)
-5. Read command with glow/bat (not yet)
+2. ✅ Find command with ripgrep + fzf
+3. ✅ Link tracking, backlinks, and graph (`zh links`, `zh backlinks`, `zh graph`)
+4. ✅ Show command (`zh show`) for note preview
 
-### Phase 2: Note Management (High Priority)
-6. Update command (not yet)
-7. Delete command (not yet)
-8. ✅ Reindex command
-9. ✅ Tag management (`zh tag`, `zh tags`)
-10. ✅ Daily notes (`zh today`, `zh yesterday`, `zh tomorrow`, `zh journal`)
-11. ✅ Bookmark type and command (`zh bookmark` browser, add, export, refresh)
+### Phase 2: Note Management ✅ COMPLETE
+5. ✅ Reindex command (full and single-file with `--file`)
+6. ✅ Tag management (`zh tag`, `zh tags` with sources: frontmatter, body)
+7. ✅ Daily notes (`zh today`, `zh yesterday`, `zh tomorrow`, `zh journal`)
+8. ✅ Bookmark type and command (`zh bookmark` browser, add, export, refresh)
+9. ✅ Person/contact management (`zh person` browser, add, list, import, export, merge)
+10. ✅ Organization management (`zh org` with hierarchy: tree, parent, subs, ancestors, descendants)
 
-### Phase 3: Neovim Integration (Medium Priority)
-12. Neovim plugin/LSP
-13. Link following in editor (`zh follow`)
-14. Quick note creation, backlink display
+### Phase 3: Neovim Integration ✅ COMPLETE
+11. ✅ nvim-cmp completion source (wikilinks, @person, #tags)
+12. ✅ Telescope pickers (browse, insert links, backlinks, forward links)
+13. ✅ Link navigation (`gf` for wikilinks and markdown links, `gF` create on missing)
+14. ✅ Hover preview (`K`)
+15. ✅ Auto-indexing on save (BufWritePost for notebook files)
 
-### Phase 4: Advanced Features (Medium Priority)
-15. Statistics and analytics (`zh stats`)
-16. Orphan detection (`zh orphans`)
-17. ✅ Graph (neighbourhood DOT/ASCII; future: full graph, mermaid)
-18. ✅ Import; general export not yet (bookmark export implemented)
+### Phase 4: Template System ✅ COMPLETE
+16. ✅ Dynamic prompts (input, write, choose, filter, confirm)
+17. ✅ Multi-select prompts (`multi: true`)
+18. ✅ Optional prompts (`optional: true`)
+19. ✅ Dynamic sources (tags, notes, files, command)
+20. ✅ Value transformations and validation
 
-### Phase 5: Polish & Optimization (Lower Priority)
-19. Performance optimization
-20. Enhanced tool integration (fzf multi-select, bat custom highlighting)
-21. Advanced query language
-22. Documentation improvements
-23. tmux session/layout and key-binding documentation (or optional `zh tmux` script)
+### Phase 5: Advanced Features (In Progress)
+21. List/browse commands (search/find provide discovery; dedicated browse possible)
+22. Edit/update/delete commands
+23. Statistics and analytics (`zh stats`)
+24. Orphan detection (`zh orphans`)
+25. General export (HTML/PDF); bookmark export implemented
+26. Advanced query language
+
+### Phase 6: Polish & Optimization (Lower Priority)
+27. Performance optimization (incremental reindex by mtime)
+28. Enhanced tool integration (fzf multi-select, bat custom highlighting)
+29. tmux session/layout documentation
+30. LSP server for ZettelHub
 
 ## Notes
 

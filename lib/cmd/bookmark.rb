@@ -200,6 +200,8 @@ class BookmarkCommand
 
     editor_cmd = build_editor_command(config, File.expand_path(filepath), '1')
     system(editor_cmd)
+    # Reindex after edit to capture changes (links, tags, content)
+    index_note(config, filepath)
   end
 
   def parse_add_args(args)

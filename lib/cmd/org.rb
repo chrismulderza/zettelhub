@@ -104,6 +104,8 @@ class OrgCommand
     if File.exist?(filepath)
       editor_cmd = build_editor_command(config, filepath)
       system(editor_cmd)
+      # Reindex after edit to capture changes (links, tags, content)
+      index_note(config, filepath)
     end
   end
 
@@ -416,6 +418,16 @@ class OrgCommand
     args = args.to_s.empty? ? '{path}' : args
     args = args.gsub('{path}', filepath).gsub('{line}', line)
     Utils.build_tool_invocation(executable, opts || [], args)
+  end
+
+  # Reindexes a single note after editing. Updates index with new content, links, tags.
+  def index_note(config, filepath)
+    require_relative '../indexer'
+    require_relative '../models/note'
+    note = Note.new(path: filepath)
+    indexer = Indexer.new(config)
+    indexer.index_note(note)
+    debug_print("Reindexed: #{filepath}")
   end
 
   # Builds preview command for fzf. Uses bat if available, falls back to cat.

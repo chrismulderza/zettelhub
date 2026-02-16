@@ -13,9 +13,15 @@ class ReindexCommand
   include Debug
 
   # Handles --completion and --help; rescans notebook and rebuilds index.
+  # Supports --file <path> for single-file indexing (used by Neovim auto-index).
   def run(*args)
     return output_completion if args.first == '--completion'
     return output_help if args.first == '--help' || args.first == '-h'
+
+    # Single file mode: zh reindex --file <path>
+    if args[0] == '--file' && args[1]
+      return index_single_file(args[1])
+    end
 
     config = Config.load_with_notebook(debug: debug?)
     notebook_path = config['notebook_path']
@@ -72,6 +78,26 @@ class ReindexCommand
 
   private
 
+  # Indexes a single file by path. Used for incremental indexing (e.g. Neovim on save).
+  # Exits silently on error to avoid disrupting editor workflow.
+  def index_single_file(filepath)
+    config = Config.load_with_notebook(debug: debug?)
+    unless File.exist?(filepath)
+      debug_print("File not found: #{filepath}")
+      return
+    end
+
+    begin
+      note = Note.new(path: filepath)
+      indexer = Indexer.new(config)
+      indexer.index_note(note)
+      indexer.update_links_for_note(note)
+      debug_print("Indexed single file: #{filepath} (id: #{note.id})")
+    rescue StandardError => e
+      debug_print("Failed to index #{filepath}: #{e.message}")
+    end
+  end
+
   def find_markdown_files(notebook_path)
     # Use Dir.glob to recursively find all .md files
     pattern = File.join(notebook_path, '**', '*.md')
@@ -85,9 +111,9 @@ class ReindexCommand
     end
   end
 
-  # Prints completion candidates for shell completion (empty for reindex).
+  # Prints completion candidates for shell completion.
   def output_completion
-    puts '--help -h'
+    puts '--help -h --file'
   end
 
   # Prints command-specific usage and options to stdout.
@@ -97,19 +123,25 @@ class ReindexCommand
 
       USAGE:
           zh reindex
+          zh reindex --file <path>
 
       DESCRIPTION:
           Recursively scans the notebook directory for all markdown (.md) files,
           reads their YAML frontmatter, and adds/updates entries in the SQLite
           index database. Files in the .zh directory are automatically skipped.
 
+          Use --file to index a single file (useful for incremental updates after
+          editing, e.g. from Neovim auto-index on save).
+
       OPTIONS:
+          --file <path>   Index a single file instead of full reindex
           --help, -h      Show this help message
-          --completion    Output shell completion candidates (empty for this command)
+          --completion    Output shell completion candidates
 
       EXAMPLES:
-          zh reindex              Re-index all notes in the notebook
-          zh reindex --help       Show this help message
+          zh reindex                        Re-index all notes in the notebook
+          zh reindex --file path/to/note.md Index a single file
+          zh reindex --help                 Show this help message
 
       The reindex command will:
           - Find all .md files recursively in the notebook directory

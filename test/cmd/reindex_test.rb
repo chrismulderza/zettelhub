@@ -399,7 +399,46 @@ class ReindexCommandTest < Minitest::Test
   def test_reindex_completion_output
     cmd = ReindexCommand.new
     output = capture_io { cmd.run('--completion') }.first
-    assert_equal '--help -h', output.strip, 'Completion should return options'
+    assert_equal '--help -h --file', output.strip, 'Completion should return options'
+  end
+
+  def test_reindex_single_file
+    # Create a note file
+    note_path = File.join(@tmpdir, 'test-single-note.md')
+    File.write(note_path, <<~MD)
+      ---
+      id: "abc12345"
+      title: "Test Single Note"
+      type: note
+      tags: [test]
+      ---
+      # Test Single Note
+
+      Some content here.
+    MD
+
+    # Index single file
+    Dir.chdir(@tmpdir) do
+      cmd = ReindexCommand.new
+      capture_io { cmd.run('--file', note_path) }
+    end
+
+    # Verify note was indexed
+    assert File.exist?(@db_path), 'Index database should exist'
+
+    db = SQLite3::Database.new(@db_path)
+    results = db.execute('SELECT id, title FROM notes WHERE id = ?', 'abc12345')
+    assert_equal 1, results.length, 'Note should be indexed'
+    assert_equal 'Test Single Note', results.first[1], 'Note title should match'
+  end
+
+  def test_reindex_single_file_nonexistent
+    Dir.chdir(@tmpdir) do
+      cmd = ReindexCommand.new
+      # Should not raise, just silently skip
+      capture_io { cmd.run('--file', '/nonexistent/path.md') }
+      # No error output expected (handled gracefully)
+    end
   end
 
   def test_reindex_help_output

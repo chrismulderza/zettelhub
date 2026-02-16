@@ -126,15 +126,30 @@ When writing ERB templates, it's important to properly quote YAML values to
 avoid parsing errors:
 
 1. **String values must be quoted** if they may contain special YAML characters
-   (`:`, `#`, `[`, `]`, etc.): ```yaml title: "<%= title %>" date: "<%= date %>"
-   aliases: "<%= aliases %>" ```
+   (`:`, `#`, `[`, `]`, etc.): 
+
+   ```yaml 
+   title: "<%= title %>" 
+   date: "<%= date %>"
+   aliases: "<%= aliases %>" 
+   ```
 
 2. **The `config.path` field must always be quoted** since it may contain
-   special characters from interpolated variables: ```yaml config: path: "<%= id
-   %>-<%= title %>.md" ```
+   special characters from interpolated variables: 
+
+   ```yaml 
+   config: 
+    path: "<%= id %>-<%= title %>.md" 
+   ```
 
 3. **The `tags` field should NOT be quoted** since it's rendered as an inline
-   YAML array: ```yaml tags: <%= tags %> ``` The `tags` variable is
+   YAML array: 
+
+   ```yaml 
+   tags: <%= tags %> 
+   ``` 
+
+   The `tags` variable is
    automatically formatted as `["tag1", "tag2"]` by the add command.
 
 **Filename Normalization with `slugify`:**
@@ -157,8 +172,7 @@ slugify_replacement: '-'  # Options: '-', '_', or '' (empty string to remove)
 Example usage in `config.path`: 
 
 ```yaml 
-config: path: "<%= slugify(id) %>-<%=
-slugify(title) %>.md" 
+config: path: "<%= slugify(id) %>-<%= slugify(title) %>.md" 
 ```
 
 This ensures filenames are filesystem-friendly and URL-safe, even when titles
@@ -286,7 +300,6 @@ syncing with remote repositories.
 Enable automatic commits after `add`, `tag`, and `import` operations:
 
 ```yaml 
----
 git: 
   auto_commit: true 
   auto_push: false  # Enable to also push after each auto-commit 
@@ -297,8 +310,8 @@ git:
 **Example workflow:**
 
 ```bash 
-# Initialize git in your notebook zh git init --remote
-git@github.com:user/notes.git
+# Initialize git in your notebook 
+zh git init --remote git@github.com:user/notes.git
 
 # Create a note (auto-committed if auto_commit: true) 
 zh add --title "Meeting Notes" --tags "work,project"

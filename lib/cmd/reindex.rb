@@ -15,7 +15,7 @@ class ReindexCommand
   # Handles --completion and --help; rescans notebook and rebuilds index.
   # Supports --file <path> for single-file indexing (used by Neovim auto-index).
   def run(*args)
-    return output_completion if args.first == '--completion'
+    return output_completion(args) if args.first == '--completion'
     return output_help if args.first == '--help' || args.first == '-h'
 
     # Single file mode: zh reindex --file <path>
@@ -112,8 +112,15 @@ class ReindexCommand
   end
 
   # Prints completion candidates for shell completion.
-  def output_completion
-    puts '--help -h --file'
+  # Returns __FILE__ for options that take file paths.
+  def output_completion(args = [])
+    prev = args[1]
+    case prev
+    when '--file'
+      puts '__FILE__'
+    else
+      puts '--help -h --file'
+    end
   end
 
   # Prints command-specific usage and options to stdout.

@@ -386,8 +386,15 @@ class ImportCommand
   end
 
   # Prints completion candidates for shell completion.
-  def output_completion(_args)
-    puts '--into --target-dir --recursive --dry-run --help -h'
+  # Returns __DIR__ for options that take directory paths, __FILE__ for file paths.
+  def output_completion(args)
+    prev = args[1]
+    case prev
+    when '--into', '--target-dir'
+      puts '__DIR__'
+    else
+      puts '--into --target-dir --recursive --dry-run --help -h'
+    end
   end
 
   # Prints command-specific usage and options to stdout.

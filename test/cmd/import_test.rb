@@ -77,6 +77,18 @@ class ImportCommandTest < Minitest::Test
     assert_includes opts, '--help'
   end
 
+  def test_import_completion_into_option
+    cmd = ImportCommand.new
+    out, = capture_io { cmd.run('--completion', '--into') }
+    assert_equal '__DIR__', out.strip, 'Completion for --into should return __DIR__ signal'
+  end
+
+  def test_import_completion_target_dir_option
+    cmd = ImportCommand.new
+    out, = capture_io { cmd.run('--completion', '--target-dir') }
+    assert_equal '__DIR__', out.strip, 'Completion for --target-dir should return __DIR__ signal'
+  end
+
   def test_import_assigns_new_id_and_updates_frontmatter
     note_a = <<~MD
       ---

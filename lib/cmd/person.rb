@@ -18,7 +18,7 @@ class PersonCommand
 
   # Main entry point.
   def run(*args)
-    return output_completion if args.first == '--completion'
+    return output_completion(args) if args.first == '--completion'
     return output_help if args.first == '--help' || args.first == '-h'
 
     subcommand = args.shift || 'browse'
@@ -553,8 +553,15 @@ class PersonCommand
   end
 
   # Outputs completion candidates.
-  def output_completion
-    puts 'add list import export birthdays stale merge browse --help -h'
+  # Returns __FILE__ for options that take file paths.
+  def output_completion(args = [])
+    prev = args[1]
+    case prev
+    when '--output', '-o'
+      puts '__FILE__'
+    else
+      puts 'add list import export birthdays stale merge browse --help -h'
+    end
   end
 
   # Outputs help text.

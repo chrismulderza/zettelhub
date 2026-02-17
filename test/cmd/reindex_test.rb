@@ -402,6 +402,12 @@ class ReindexCommandTest < Minitest::Test
     assert_equal '--help -h --file', output.strip, 'Completion should return options'
   end
 
+  def test_reindex_completion_file_option
+    cmd = ReindexCommand.new
+    output = capture_io { cmd.run('--completion', '--file') }.first
+    assert_equal '__FILE__', output.strip, 'Completion for --file should return __FILE__ signal'
+  end
+
   def test_reindex_single_file
     # Create a note file
     note_path = File.join(@tmpdir, 'test-single-note.md')

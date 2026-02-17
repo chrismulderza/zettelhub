@@ -58,6 +58,16 @@ class BookmarkCommandTest < Minitest::Test
     end
   end
 
+  def test_completion_output_option
+    Dir.chdir(@notebook) do
+      out, err = capture_io do
+        BookmarkCommand.new.run('--completion', '--output')
+      end
+      assert_equal '', err
+      assert_equal '__FILE__', out.strip, 'Completion for --output should return __FILE__ signal'
+    end
+  end
+
   def test_refresh_help
     Dir.chdir(@notebook) do
       out, err = capture_io do

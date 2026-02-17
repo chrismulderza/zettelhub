@@ -31,7 +31,7 @@ class BookmarkCommand
 
   # Handles --completion and --help; dispatches to browser, add, export, or refresh subcommand.
   def run(*args)
-    return output_completion if args.first == '--completion'
+    return output_completion(args) if args.first == '--completion'
     return output_help if args.first == '--help' || args.first == '-h'
 
     sub = args.first
@@ -553,8 +553,15 @@ class BookmarkCommand
   end
 
   # Prints completion candidates (add, export, refresh) for shell completion.
-  def output_completion
-    puts 'add export refresh --help -h'
+  # Returns __FILE__ for options that take file paths.
+  def output_completion(args = [])
+    prev = args[1]
+    case prev
+    when '--output'
+      puts '__FILE__'
+    else
+      puts 'add export refresh --help -h'
+    end
   end
 
   # Prints command-specific usage and options to stdout.

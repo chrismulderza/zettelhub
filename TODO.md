@@ -44,6 +44,10 @@ This document outlines proposed features and enhancements to transform ZettelHub
 
 ## High Priority Features
 
+### Bugs
+
+- Fix wiki links syntax!!
+
 ### Search & Discovery
 
 #### 1. Search Command (`zh search`) ✅ IMPLEMENTED
